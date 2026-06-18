@@ -16,6 +16,7 @@ import {
   generateUniqueLicenseKey,
 } from "@/lib/licenses/generator";
 import { createClient } from "@/lib/supabase/server";
+import { sendLicenseGeneratedEmail } from "@/lib/emails/actions";
 
 const LICENSES_PATH = "/licenses";
 const ADMIN_LICENSES_PATH = "/admin/licenses";
@@ -102,6 +103,30 @@ export async function generateLicenseForOrder(
 
     if (error || !license) {
       return { error: error?.message ?? "Failed to generate license." };
+    }
+
+    // Get user and product info for email
+    const { data: user } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", userId)
+      .single();
+
+    const { data: product } = await supabase
+      .from("products")
+      .select("name")
+      .eq("id", productId)
+      .single();
+
+    // Send license email
+    if (user && product) {
+      await sendLicenseGeneratedEmail(
+        userId,
+        user.email || "",
+        user.full_name || "Customer",
+        product.name,
+        licenseKey
+      );
     }
 
     revalidatePath(LICENSES_PATH);

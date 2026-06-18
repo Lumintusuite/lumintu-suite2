@@ -24,6 +24,7 @@ import { generateLicenseForOrder } from "@/lib/licenses/actions";
 import { getReferralFromCookie, clearReferralCookie } from "@/lib/affiliates/tracking";
 import { getAffiliateByCode } from "@/lib/affiliates/queries";
 import { createReferral } from "@/lib/affiliates/actions";
+import { sendPurchaseSuccessEmail } from "@/lib/emails/actions";
 
 const PAYMENTS_PATH = "/payments";
 const ADMIN_PAYMENTS_PATH = "/admin/payments";
@@ -196,6 +197,15 @@ export async function processWebhook(
     // Generate licenses for each product in the order
     const order = await getOrderById(payment.order_id);
     if (order) {
+      // Send purchase success email
+      await sendPurchaseSuccessEmail(
+        order.user_id,
+        (payment as any).orders?.profiles?.email || "",
+        (payment as any).orders?.profiles?.full_name || "Customer",
+        payment.order_id,
+        order.total
+      );
+
       for (const item of order.order_items) {
         // Check if license already exists for this product and order
         const { data: existingLicense } = await supabase

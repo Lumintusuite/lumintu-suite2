@@ -14,6 +14,7 @@ import {
 import type { AffiliateActionState } from "@/lib/affiliates/types";
 import { requireAdmin, requireAuthenticated } from "@/lib/affiliates/queries";
 import { createClient } from "@/lib/supabase/server";
+import { sendAffiliateApprovedEmail, sendReferralSaleEmail } from "@/lib/emails/actions";
 
 const AFFILIATES_PATH = "/affiliate";
 const ADMIN_AFFILIATES_PATH = "/admin/affiliates";
@@ -102,10 +103,10 @@ export async function approveAffiliate(
     return { error: error.message };
   }
 
-  // Create notification
+  // Create notification and send email
   const { data: affiliate } = await supabase
     .from("affiliates")
-    .select("id")
+    .select("id, user_id, affiliate_code")
     .eq("id", id)
     .single();
 
@@ -115,6 +116,22 @@ export async function approveAffiliate(
       title: "Affiliate Approved",
       message: "Your affiliate account has been approved. You can now start earning commissions!",
     });
+
+    // Get user info for email
+    const { data: user } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", affiliate.user_id)
+      .single();
+
+    if (user) {
+      await sendAffiliateApprovedEmail(
+        affiliate.user_id,
+        user.email || "",
+        user.full_name || "Affiliate",
+        affiliate.affiliate_code
+      );
+    }
   }
 
   revalidatePath(ADMIN_AFFILIATES_PATH);
@@ -267,12 +284,36 @@ export async function createReferral(
     return { error: error.message };
   }
 
-  // Create notification
-  await supabase.from("affiliate_notifications").insert({
-    affiliate_id: affiliateId,
-    title: "New Referral Sale",
-    message: `You earned $${commissionAmount.toFixed(2)} commission from a new sale!`,
-  });
+  // Create notification and send email
+  const { data: affiliate } = await supabase
+    .from("affiliates")
+    .select("user_id")
+    .eq("id", affiliateId)
+    .single();
+
+  if (affiliate) {
+    await supabase.from("affiliate_notifications").insert({
+      affiliate_id: affiliateId,
+      title: "New Referral Sale",
+      message: `You earned $${commissionAmount.toFixed(2)} commission from a new sale!`,
+    });
+
+    // Get user info for email
+    const { data: user } = await supabase
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", affiliate.user_id)
+      .single();
+
+    if (user) {
+      await sendReferralSaleEmail(
+        affiliate.user_id,
+        user.email || "",
+        user.full_name || "Affiliate",
+        commissionAmount
+      );
+    }
+  }
 
   revalidatePath(AFFILIATES_PATH);
   revalidatePath(ADMIN_REFERRALS_PATH);

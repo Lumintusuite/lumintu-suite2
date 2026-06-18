@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getDashboardPath } from "@/lib/auth/types";
 import type { AuthActionState } from "@/lib/auth/types";
 import { createClient } from "@/lib/supabase/server";
+import { sendWelcomeEmail } from "@/lib/emails/actions";
 
 function getFormString(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -103,6 +104,11 @@ export async function register(
   }
 
   if (data.session) {
+    // Send welcome email
+    if (data.user) {
+      await sendWelcomeEmail(data.user.id, email, fullName);
+    }
+    
     revalidatePath("/", "layout");
     redirect("/member");
   }

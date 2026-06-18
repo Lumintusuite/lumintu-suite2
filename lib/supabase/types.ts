@@ -13,6 +13,7 @@ export type PaymentStatus = "pending" | "paid" | "failed" | "expired";
 export type LicenseStatus = "active" | "expired" | "suspended";
 export type AffiliateStatus = "pending" | "approved" | "rejected";
 export type ReferralStatus = "pending" | "approved";
+export type EmailStatus = "pending" | "sent" | "failed";
 
 export interface Database {
   public: {
@@ -471,6 +472,44 @@ export interface Database {
           },
         ];
       };
+      email_logs: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          email_type: string;
+          status: EmailStatus;
+          sent_at: string | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          email_type: string;
+          status?: EmailStatus;
+          sent_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          email_type?: string;
+          status?: EmailStatus;
+          sent_at?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "email_logs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -487,6 +526,7 @@ export interface Database {
       license_status: LicenseStatus;
       affiliate_status: AffiliateStatus;
       referral_status: ReferralStatus;
+      email_status: EmailStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -506,6 +546,7 @@ export type Affiliate = Tables<"affiliates">;
 export type ReferralClick = Tables<"referral_clicks">;
 export type Referral = Tables<"referrals">;
 export type AffiliateNotification = Tables<"affiliate_notifications">;
+export type EmailLog = Tables<"email_logs">;
 
 export type ProductWithCategory = Product & {
   categories: Pick<Category, "id" | "name" | "slug"> | null;
