@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   FolderTree,
   LayoutDashboard,
@@ -10,6 +11,13 @@ import {
   Settings,
   Shield,
   Users,
+  Menu,
+  X,
+  Key,
+  ShoppingCart,
+  DollarSign,
+  CreditCard,
+  Mail,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -49,7 +57,7 @@ export function UserNav({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative size-9 rounded-full p-0">
+        <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
           <Avatar>
             <AvatarFallback>{getInitials(fullName, email)}</AvatarFallback>
           </Avatar>
@@ -71,7 +79,7 @@ export function UserNav({
         <DropdownMenuItem asChild>
           <form action={signOut} className="w-full">
             <button type="submit" className="flex w-full items-center gap-2">
-              <LogOut className="size-4" />
+              <LogOut className="h-4 w-4" />
               Sign out
             </button>
           </form>
@@ -105,13 +113,43 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-muted/30">
-      <aside className="hidden w-64 flex-col border-r bg-sidebar text-sidebar-foreground md:flex">
+    <div className="flex min-h-screen bg-background">
+      {/* Mobile Menu Button */}
+      <div className="fixed top-4 left-4 z-50 md:hidden">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? (
+            <X className="h-5 w-5" />
+          ) : (
+            <Menu className="h-5 w-5" />
+          )}
+        </Button>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-40 h-full w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-transform md:static md:flex",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
         <div className="flex h-16 items-center border-b border-sidebar-border px-6">
           <div>
-            <p className="font-heading text-sm font-semibold">{title}</p>
+            <p className="text-sm font-semibold">{title}</p>
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
         </div>
@@ -127,26 +165,41 @@ export function DashboardShell({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className="h-4 w-4" />
                 {item.label}
               </Link>
             );
           })}
         </nav>
+        <div className="border-t border-sidebar-border p-4">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback>{getInitials(fullName, email)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">
+                {fullName || "User"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {roleLabel}
+              </p>
+            </div>
+          </div>
+        </div>
       </aside>
 
+      {/* Main Content */}
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-8">
-          <div className="md:hidden">
-            <p className="font-heading text-sm font-semibold">{title}</p>
-          </div>
+        <header className="flex h-16 items-center justify-between border-b border-border bg-background px-4 md:px-8">
+          <div className="md:hidden w-8" />
           <div className="ml-auto">
             <UserNav
               email={email}
@@ -165,11 +218,21 @@ export const adminNavItems: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/products", label: "Products", icon: Package },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
+  { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/admin/payments", label: "Payments", icon: CreditCard },
+  { href: "/admin/licenses", label: "Licenses", icon: Key },
+  { href: "/admin/affiliates", label: "Affiliates", icon: Users },
+  { href: "/admin/referrals", label: "Referrals", icon: DollarSign },
+  { href: "/admin/emails", label: "Emails", icon: Mail },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export const memberNavItems: NavItem[] = [
   { href: "/member", label: "Overview", icon: LayoutDashboard },
+  { href: "/member/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/member/payments", label: "Payments", icon: CreditCard },
+  { href: "/member/licenses", label: "Licenses", icon: Key },
+  { href: "/member/affiliate", label: "Affiliate", icon: Users },
   { href: "/member/account", label: "Account", icon: Shield },
 ];
