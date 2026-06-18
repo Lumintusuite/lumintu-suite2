@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,8 +13,39 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lumintu Suite",
-  description: "Authentication and role-based dashboards for Lumintu Suite",
+  title: "Lumintu Suite - Build. Automate. Scale.",
+  description: "Sell digital products, manage licenses, grow with affiliates, and automate your business from one platform.",
+  keywords: ["digital products", "license management", "affiliate system", "SaaS", "automation"],
+  authors: [{ name: "Lumintu Suite" }],
+  creator: "Lumintu Suite",
+  publisher: "Lumintu Suite",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://lumintu-suite.com",
+    title: "Lumintu Suite - Build. Automate. Scale.",
+    description: "Sell digital products, manage licenses, grow with affiliates, and automate your business from one platform.",
+    siteName: "Lumintu Suite",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Lumintu Suite - Build. Automate. Scale.",
+    description: "Sell digital products, manage licenses, grow with affiliates, and automate your business from one platform.",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({

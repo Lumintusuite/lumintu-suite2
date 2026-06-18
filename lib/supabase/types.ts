@@ -510,6 +510,77 @@ export interface Database {
           },
         ];
       };
+      webhook_logs: {
+        Row: {
+          id: string;
+          webhook_type: string;
+          payload: any;
+          response_status: number | null;
+          response_body: string | null;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          webhook_type: string;
+          payload?: any;
+          response_status?: number | null;
+          response_body?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          webhook_type?: string;
+          payload?: any;
+          response_status?: number | null;
+          response_body?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      error_logs: {
+        Row: {
+          id: string;
+          error_type: string;
+          error_message: string | null;
+          stack_trace: string | null;
+          user_id: string | null;
+          path: string | null;
+          metadata: any;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          error_type: string;
+          error_message?: string | null;
+          stack_trace?: string | null;
+          user_id?: string | null;
+          path?: string | null;
+          metadata?: any;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          error_type?: string;
+          error_message?: string | null;
+          stack_trace?: string | null;
+          user_id?: string | null;
+          path?: string | null;
+          metadata?: any;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "error_logs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
