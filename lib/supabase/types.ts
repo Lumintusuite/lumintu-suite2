@@ -11,6 +11,8 @@ export type ProductStatus = "draft" | "published";
 export type OrderStatus = "pending" | "completed" | "cancelled";
 export type PaymentStatus = "pending" | "paid" | "failed" | "expired";
 export type LicenseStatus = "active" | "expired" | "suspended";
+export type AffiliateStatus = "pending" | "approved" | "rejected";
+export type ReferralStatus = "pending" | "approved";
 
 export interface Database {
   public: {
@@ -325,6 +327,150 @@ export interface Database {
           },
         ];
       };
+      affiliates: {
+        Row: {
+          id: string;
+          user_id: string;
+          affiliate_code: string;
+          status: AffiliateStatus;
+          commission_rate: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          affiliate_code: string;
+          status?: AffiliateStatus;
+          commission_rate?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          affiliate_code?: string;
+          status?: AffiliateStatus;
+          commission_rate?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "affiliates_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      referral_clicks: {
+        Row: {
+          id: string;
+          affiliate_id: string;
+          ip_address: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          affiliate_id: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          affiliate_id?: string;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "referral_clicks_affiliate_id_fkey";
+            columns: ["affiliate_id"];
+            isOneToOne: false;
+            referencedRelation: "affiliates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      referrals: {
+        Row: {
+          id: string;
+          affiliate_id: string;
+          order_id: string;
+          commission_amount: number;
+          status: ReferralStatus;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          affiliate_id: string;
+          order_id: string;
+          commission_amount?: number;
+          status?: ReferralStatus;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          affiliate_id?: string;
+          order_id?: string;
+          commission_amount?: number;
+          status?: ReferralStatus;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "referrals_affiliate_id_fkey";
+            columns: ["affiliate_id"];
+            isOneToOne: false;
+            referencedRelation: "affiliates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referrals_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      affiliate_notifications: {
+        Row: {
+          id: string;
+          affiliate_id: string;
+          title: string;
+          message: string;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          affiliate_id: string;
+          title: string;
+          message: string;
+          is_read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          affiliate_id?: string;
+          title?: string;
+          message?: string;
+          is_read?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_notifications_affiliate_id_fkey";
+            columns: ["affiliate_id"];
+            isOneToOne: false;
+            referencedRelation: "affiliates";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -339,6 +485,8 @@ export interface Database {
       order_status: OrderStatus;
       payment_status: PaymentStatus;
       license_status: LicenseStatus;
+      affiliate_status: AffiliateStatus;
+      referral_status: ReferralStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -354,6 +502,10 @@ export type OrderItem = Tables<"order_items">;
 export type Payment = Tables<"payments">;
 export type License = Tables<"licenses">;
 export type LicenseActivation = Tables<"license_activations">;
+export type Affiliate = Tables<"affiliates">;
+export type ReferralClick = Tables<"referral_clicks">;
+export type Referral = Tables<"referrals">;
+export type AffiliateNotification = Tables<"affiliate_notifications">;
 
 export type ProductWithCategory = Product & {
   categories: Pick<Category, "id" | "name" | "slug"> | null;

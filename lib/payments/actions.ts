@@ -21,6 +21,9 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getOrderById } from "@/lib/orders/queries";
 import { generateLicenseForOrder } from "@/lib/licenses/actions";
+import { getReferralFromCookie, clearReferralCookie } from "@/lib/affiliates/tracking";
+import { getAffiliateByCode } from "@/lib/affiliates/queries";
+import { createReferral } from "@/lib/affiliates/actions";
 
 const PAYMENTS_PATH = "/payments";
 const ADMIN_PAYMENTS_PATH = "/admin/payments";
@@ -210,6 +213,27 @@ export async function processWebhook(
           );
         }
       }
+
+      // Check for affiliate referral and create commission
+      const referralCode = await getReferralFromCookie();
+      if (referralCode) {
+        const affiliate = await getAffiliateByCode(referralCode);
+        
+        if (affiliate && affiliate.status === "approved") {
+          // Don't create commission if the buyer is the affiliate themselves
+          if (affiliate.user_id !== order.user_id) {
+            const commissionAmount = order.total * (affiliate.commission_rate / 100);
+            await createReferral(
+              affiliate.id,
+              payment.order_id,
+              commissionAmount
+            );
+          }
+        }
+        
+        // Clear referral cookie after processing
+        await clearReferralCookie();
+      }
     }
   } else if (newStatus === "failed" || newStatus === "expired") {
     await supabase
@@ -223,6 +247,9 @@ export async function processWebhook(
   revalidatePath(`/orders/${payment.order_id}`);
   revalidatePath("/licenses");
   revalidatePath("/admin/licenses");
+  revalidatePath("/affiliate");
+  revalidatePath("/admin/affiliates");
+  revalidatePath("/admin/referrals");
 
   return { success: true };
 }
