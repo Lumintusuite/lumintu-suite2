@@ -10,6 +10,7 @@ export type UserRole = "admin" | "member";
 export type ProductStatus = "draft" | "published";
 export type OrderStatus = "pending" | "completed" | "cancelled";
 export type PaymentStatus = "pending" | "paid" | "failed" | "expired";
+export type LicenseStatus = "active" | "expired" | "suspended";
 
 export interface Database {
   public: {
@@ -225,6 +226,105 @@ export interface Database {
           },
         ];
       };
+      licenses: {
+        Row: {
+          id: string;
+          user_id: string;
+          product_id: string;
+          order_id: string | null;
+          license_key: string;
+          status: LicenseStatus;
+          expires_at: string | null;
+          activation_count: number;
+          max_activations: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          product_id: string;
+          order_id?: string | null;
+          license_key: string;
+          status?: LicenseStatus;
+          expires_at?: string | null;
+          activation_count?: number;
+          max_activations?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          product_id?: string;
+          order_id?: string | null;
+          license_key?: string;
+          status?: LicenseStatus;
+          expires_at?: string | null;
+          activation_count?: number;
+          max_activations?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "licenses_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "licenses_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "licenses_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      license_activations: {
+        Row: {
+          id: string;
+          license_id: string;
+          device_name: string | null;
+          domain_name: string | null;
+          ip_address: string | null;
+          activated_at: string;
+        };
+        Insert: {
+          id?: string;
+          license_id: string;
+          device_name?: string | null;
+          domain_name?: string | null;
+          ip_address?: string | null;
+          activated_at?: string;
+        };
+        Update: {
+          id?: string;
+          license_id?: string;
+          device_name?: string | null;
+          domain_name?: string | null;
+          ip_address?: string | null;
+          activated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "license_activations_license_id_fkey";
+            columns: ["license_id"];
+            isOneToOne: false;
+            referencedRelation: "licenses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -238,6 +338,7 @@ export interface Database {
       product_status: ProductStatus;
       order_status: OrderStatus;
       payment_status: PaymentStatus;
+      license_status: LicenseStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -251,6 +352,8 @@ export type Product = Tables<"products">;
 export type Order = Tables<"orders">;
 export type OrderItem = Tables<"order_items">;
 export type Payment = Tables<"payments">;
+export type License = Tables<"licenses">;
+export type LicenseActivation = Tables<"license_activations">;
 
 export type ProductWithCategory = Product & {
   categories: Pick<Category, "id" | "name" | "slug"> | null;

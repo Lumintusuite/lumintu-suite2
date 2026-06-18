@@ -20,6 +20,7 @@ import {
 } from "@/lib/payments/midtrans";
 import { createClient } from "@/lib/supabase/server";
 import { getOrderById } from "@/lib/orders/queries";
+import { generateLicenseForOrder } from "@/lib/licenses/actions";
 
 const PAYMENTS_PATH = "/payments";
 const ADMIN_PAYMENTS_PATH = "/admin/payments";
@@ -188,6 +189,28 @@ export async function processWebhook(
       .from("orders")
       .update({ status: "completed" })
       .eq("id", payment.order_id);
+
+    // Generate licenses for each product in the order
+    const order = await getOrderById(payment.order_id);
+    if (order) {
+      for (const item of order.order_items) {
+        // Check if license already exists for this product and order
+        const { data: existingLicense } = await supabase
+          .from("licenses")
+          .select("id")
+          .eq("order_id", payment.order_id)
+          .eq("product_id", item.product_id)
+          .maybeSingle();
+
+        if (!existingLicense) {
+          await generateLicenseForOrder(
+            payment.order_id,
+            order.user_id,
+            item.product_id
+          );
+        }
+      }
+    }
   } else if (newStatus === "failed" || newStatus === "expired") {
     await supabase
       .from("orders")
@@ -198,6 +221,8 @@ export async function processWebhook(
   revalidatePath(PAYMENTS_PATH);
   revalidatePath(ADMIN_PAYMENTS_PATH);
   revalidatePath(`/orders/${payment.order_id}`);
+  revalidatePath("/licenses");
+  revalidatePath("/admin/licenses");
 
   return { success: true };
 }
