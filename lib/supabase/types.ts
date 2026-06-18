@@ -9,6 +9,7 @@ export type Json =
 export type UserRole = "admin" | "member";
 export type ProductStatus = "draft" | "published";
 export type OrderStatus = "pending" | "completed" | "cancelled";
+export type PaymentStatus = "pending" | "paid" | "failed" | "expired";
 
 export interface Database {
   public: {
@@ -183,6 +184,47 @@ export interface Database {
           },
         ];
       };
+      payments: {
+        Row: {
+          id: string;
+          order_id: string;
+          midtrans_order_id: string | null;
+          payment_method: string | null;
+          gross_amount: number;
+          status: PaymentStatus;
+          paid_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          midtrans_order_id?: string | null;
+          payment_method?: string | null;
+          gross_amount?: number;
+          status?: PaymentStatus;
+          paid_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_id?: string;
+          midtrans_order_id?: string | null;
+          payment_method?: string | null;
+          gross_amount?: number;
+          status?: PaymentStatus;
+          paid_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payments_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -195,6 +237,7 @@ export interface Database {
       user_role: UserRole;
       product_status: ProductStatus;
       order_status: OrderStatus;
+      payment_status: PaymentStatus;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -207,6 +250,7 @@ export type Category = Tables<"categories">;
 export type Product = Tables<"products">;
 export type Order = Tables<"orders">;
 export type OrderItem = Tables<"order_items">;
+export type Payment = Tables<"payments">;
 
 export type ProductWithCategory = Product & {
   categories: Pick<Category, "id" | "name" | "slug"> | null;

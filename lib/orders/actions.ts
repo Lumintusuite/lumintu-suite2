@@ -119,6 +119,96 @@ export async function createOrder(
   redirect(`/checkout/success?orderId=${order.id}`);
 }
 
+export async function createPendingOrder(
+  items: Array<{ productId: string; price: number; quantity: number }>
+): Promise<{ orderId: string; total: number } | { error: string }> {
+  const auth = await requireAuthenticated();
+
+  if ("error" in auth) {
+    return { error: auth.error };
+  }
+
+  const parsed = createOrderSchema.safeParse({ items });
+
+  if (!parsed.success) {
+    return { error: "Invalid order items." };
+  }
+
+  const supabase = await createClient();
+
+  // Calculate total and verify products exist and are published
+  let total = 0;
+  const productIds = parsed.data.items.map((item) => item.productId);
+
+  const { data: products, error: productsError } = await supabase
+    .from("products")
+    .select("id, price, status")
+    .in("id", productIds);
+
+  if (productsError || !products) {
+    return { error: "Failed to verify products." };
+  }
+
+  const productMap = new Map(
+    products.map((p: { id: string; price: number; status: string }) => [
+      p.id,
+      p,
+    ])
+  );
+
+  for (const item of parsed.data.items) {
+    const product = productMap.get(item.productId);
+
+    if (!product) {
+      return { error: `Product with ID ${item.productId} not found.` };
+    }
+
+    if (product.status !== "published") {
+      return { error: `Product ${item.productId} is not available for purchase.` };
+    }
+
+    total += product.price * item.quantity;
+  }
+
+  // Create order with pending status
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .insert({
+      user_id: auth.user.id,
+      total,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (orderError || !order) {
+    return { error: orderError?.message ?? "Failed to create order." };
+  }
+
+  // Create order items
+  const orderItems = parsed.data.items.map((item) => ({
+    order_id: order.id,
+    product_id: item.productId,
+    price: productMap.get(item.productId)!.price as number,
+    quantity: item.quantity,
+  }));
+
+  const { error: itemsError } = await supabase
+    .from("order_items")
+    .insert(orderItems);
+
+  if (itemsError) {
+    // Rollback order if items fail
+    await supabase.from("orders").delete().eq("id", order.id);
+    return { error: itemsError.message };
+  }
+
+  revalidatePath(ORDERS_PATH);
+  revalidatePath(ADMIN_ORDERS_PATH);
+
+  return { orderId: order.id, total };
+}
+
 export async function updateOrderStatus(
   _prevState: OrderActionState,
   formData: FormData
