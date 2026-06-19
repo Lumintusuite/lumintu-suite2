@@ -1,0 +1,334 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User and Authentication
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  accounts      Account[]
+  sessions      Session[]
+  profile       Profile?
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Profiles and Roles
+enum UserRole {
+  admin
+  member
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  fullName  String?
+  role      UserRole @default(member)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orders            Order[]
+  payments          Payment[]
+  licenses          License[]
+  affiliate         Affiliate?
+  referralClicks    ReferralClick[]
+  referrals         Referral[]
+  affiliateNotifications AffiliateNotification[]
+}
+
+// Categories and Products
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  categoryId  String
+  name        String
+  slug        String        @unique
+  description String        @db.Text
+  price       Decimal       @db.Decimal(10, 2)
+  thumbnail   String?
+  filePath    String?
+  status      ProductStatus @default(draft)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  category    Category      @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+}
+
+// Orders and Payments
+enum OrderStatus {
+  pending
+  processing
+  completed
+  cancelled
+  refunded
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  profileId   String
+  total       Decimal     @db.Decimal(10, 2)
+  status      OrderStatus @default(pending)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  profile     Profile     @relation(fields: [profileId], references: [id])
+  items       OrderItem[]
+  payment     Payment?
+  referrals   Referral[]
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+enum PaymentStatus {
+  pending
+  processing
+  completed
+  failed
+  refunded
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  orderId         String        @unique
+  profileId       String
+  amount          Decimal       @db.Decimal(10, 2)
+  status          PaymentStatus @default(pending)
+  paymentMethod   String?
+  midtransOrderId String?       @unique
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order           Order         @relation(fields: [orderId], references: [id])
+  profile         Profile       @relation(fields: [profileId], references: [id])
+}
+
+// Licenses
+enum LicenseStatus {
+  active
+  expired
+  revoked
+  suspended
+}
+
+model License {
+  id              String         @id @default(uuid())
+  profileId       String
+  productId       String
+  licenseKey       String         @unique
+  status          LicenseStatus  @default(active)
+  expiresAt       DateTime?
+  activationLimit Int            @default(3)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  profile         Profile        @relation(fields: [profileId], references: [id])
+  activations     LicenseActivation[]
+}
+
+model LicenseActivation {
+  id          String   @id @default(uuid())
+  licenseId   String
+  deviceId    String
+  deviceName  String?
+  activatedAt DateTime @default(now())
+
+  license     License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, deviceId])
+}
+
+// Affiliate System
+enum AffiliateStatus {
+  pending
+  approved
+  rejected
+}
+
+enum ReferralStatus {
+  pending
+  approved
+}
+
+model Affiliate {
+  id              String           @id @default(uuid())
+  profileId       String           @unique
+  affiliateCode   String           @unique
+  status          AffiliateStatus  @default(pending)
+  commissionRate  Decimal          @db.Decimal(5, 2) @default(10.00)
+  createdAt       DateTime         @default(now())
+
+  profile         Profile          @relation(fields: [profileId], references: [id])
+  referralClicks  ReferralClick[]
+  referrals       Referral[]
+  notifications   AffiliateNotification[]
+}
+
+model ReferralClick {
+  id          String   @id @default(uuid())
+  affiliateId String
+  profileId   String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  profile     Profile   @relation(fields: [profileId], references: [id])
+}
+
+model Referral {
+  id              String         @id @default(uuid())
+  affiliateId     String
+  orderId         String
+  profileId       String
+  commissionAmount Decimal        @db.Decimal(10, 2) @default(0)
+  status          ReferralStatus @default(pending)
+  createdAt       DateTime       @default(now())
+
+  affiliate       Affiliate      @relation(fields: [affiliateId], references: [id])
+  order           Order          @relation(fields: [orderId], references: [id])
+  profile         Profile        @relation(fields: [profileId], references: [id])
+}
+
+model AffiliateNotification {
+  id          String   @id @default(uuid())
+  affiliateId String
+  profileId   String
+  title       String
+  message     String   @db.Text
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  profile     Profile   @relation(fields: [profileId], references: [id])
+}
+
+// Logging
+enum EmailType {
+  welcome
+  purchase_success
+  license_generated
+  affiliate_approved
+  referral_sale
+  commission_created
+  test
+}
+
+enum EmailStatus {
+  pending
+  sent
+  failed
+}
+
+model EmailLog {
+  id           String      @id @default(uuid())
+  userId       String?
+  emailType    EmailType
+  status       EmailStatus @default(pending)
+  sentAt       DateTime?
+  errorMessage String?     @db.Text
+  createdAt    DateTime    @default(now())
+
+  @@index([userId])
+  @@index([emailType])
+  @@index([status])
+}
+
+model WebhookLog {
+  id          String   @id @default(uuid())
+  eventType   String
+  payload     String   @db.Text
+  response    String?  @db.Text
+  statusCode  Int?
+  createdAt   DateTime @default(now())
+
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model ErrorLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  error       String   @db.Text
+  stackTrace  String?  @db.Text
+  path        String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
