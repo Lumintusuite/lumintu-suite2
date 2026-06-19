@@ -1,11 +1,18 @@
 import crypto from "crypto";
 
-const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || "";
-const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === "true";
+function getMidtransServerKey(): string {
+  return process.env.MIDTRANS_SERVER_KEY || "";
+}
 
-const MIDTRANS_API_URL = MIDTRANS_IS_PRODUCTION
-  ? "https://api.midtrans.com"
-  : "https://api.sandbox.midtrans.com";
+function getMidtransIsProduction(): boolean {
+  return process.env.MIDTRANS_IS_PRODUCTION === "true";
+}
+
+function getMidtransApiUrl(): string {
+  return getMidtransIsProduction()
+    ? "https://api.midtrans.com"
+    : "https://api.sandbox.midtrans.com";
+}
 
 export interface MidtransTransactionDetails {
   order_id: string;
@@ -52,7 +59,7 @@ export function createMidtransSignatureKey(
   statusCode: string,
   grossAmount: string
 ): string {
-  const rawSignature = `${orderId}${statusCode}${grossAmount}${MIDTRANS_SERVER_KEY}`;
+  const rawSignature = `${orderId}${statusCode}${grossAmount}${getMidtransServerKey()}`;
   return crypto.createHash("sha512").update(rawSignature).digest("hex");
 }
 
@@ -70,11 +77,11 @@ export function verifyMidtransSignature(
 export async function createMidtransTransaction(
   request: MidtransTransactionRequest
 ): Promise<MidtransSnapResponse> {
-  const response = await fetch(`${MIDTRANS_API_URL}/v2/charge`, {
+  const response = await fetch(`${getMidtransApiUrl()}/v2/charge`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Basic ${Buffer.from(MIDTRANS_SERVER_KEY + ":").toString(
+      Authorization: `Basic ${Buffer.from(getMidtransServerKey() + ":").toString(
         "base64"
       )}`,
     },

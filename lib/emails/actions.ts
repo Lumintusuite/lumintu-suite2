@@ -17,8 +17,17 @@ try {
   // Resend not installed, will handle gracefully
 }
 
-const resend = Resend ? new Resend(process.env.RESEND_API_KEY) : null;
-const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@lumintu-suite.com";
+function getResendClient() {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || !Resend) {
+    return null;
+  }
+  return new Resend(apiKey);
+}
+
+function getEmailFrom() {
+  return process.env.EMAIL_FROM || "noreply@lumintu-suite.com";
+}
 
 export type EmailType =
   | "welcome"
@@ -93,13 +102,14 @@ export async function sendWelcomeEmail(
 
     const html = getWelcomeEmailTemplate(name);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(userId, "welcome", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { data, error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "Welcome to Lumintu Suite",
       html,
@@ -129,13 +139,14 @@ export async function sendPurchaseSuccessEmail(
   try {
     const html = getPurchaseSuccessEmailTemplate(name, orderId, total);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(userId, "purchase_success", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "Order Confirmation - Lumintu Suite",
       html,
@@ -165,13 +176,14 @@ export async function sendLicenseGeneratedEmail(
   try {
     const html = getLicenseGeneratedEmailTemplate(name, productName, licenseKey);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(userId, "license_generated", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "Your License is Ready - Lumintu Suite",
       html,
@@ -200,13 +212,14 @@ export async function sendAffiliateApprovedEmail(
   try {
     const html = getAffiliateApprovedEmailTemplate(name, affiliateCode);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(userId, "affiliate_approved", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "Affiliate Application Approved - Lumintu Suite",
       html,
@@ -235,13 +248,14 @@ export async function sendReferralSaleEmail(
   try {
     const html = getReferralSaleEmailTemplate(name, commissionAmount);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(userId, "referral_sale", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "New Referral Sale - Lumintu Suite",
       html,
@@ -270,13 +284,14 @@ export async function sendCommissionCreatedEmail(
   try {
     const html = getCommissionCreatedEmailTemplate(name, commissionAmount);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(userId, "commission_created", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "Commission Approved - Lumintu Suite",
       html,
@@ -303,13 +318,14 @@ export async function sendTestEmail(
   try {
     const html = getTestEmailTemplate(name);
 
+    const resend = getResendClient();
     if (!resend) {
       await logEmail(null, "test", "failed", "Resend package not installed");
       return { success: false, error: "Email service not configured" };
     }
 
     const { error } = await resend.emails.send({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to: email,
       subject: "Test Email - Lumintu Suite",
       html,
