@@ -9,55 +9,18 @@ datasource db {
   provider = "postgresql"
 }
 
-// User and Authentication
+// User (migrated from auth.users)
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  emailVerified DateTime?
-  name          String?
-  image         String?
-  password      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
   
-  accounts      Account[]
-  sessions      Session[]
-  profile       Profile?
-}
-
-model Account {
-  id                String  @id @default(uuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(uuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
+  profile   Profile?
+  orders    Order[]
+  licenses  License[]
+  affiliates Affiliate[]
+  emailLogs EmailLog[]
+  errorLogs ErrorLog[]
 }
 
 // Profiles and Roles
@@ -67,150 +30,172 @@ enum UserRole {
 }
 
 model Profile {
-  id        String   @id @default(uuid())
-  userId    String   @unique
+  id        String   @id
   fullName  String?
   role      UserRole @default(member)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  orders            Order[]
-  payments          Payment[]
-  licenses          License[]
-  affiliate         Affiliate?
-  referralClicks    ReferralClick[]
-  referrals         Referral[]
+  user     User     @relation(fields: [id], references: [id], onDelete: Cascade)
+  orders   Order[]
+  payments Payment[]
+  licenses License[]
+  affiliate Affiliate?
+  referralClicks ReferralClick[]
   affiliateNotifications AffiliateNotification[]
+  emailLogs EmailLog[]
+  errorLogs ErrorLog[]
 }
 
 // Categories and Products
 enum ProductStatus {
   draft
-  active
-  archived
+  published
 }
 
 model Category {
   id          String   @id @default(uuid())
-  name        String   @unique
+  name        String
   slug        String   @unique
   description String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @default(now())
 
   products Product[]
 }
 
 model Product {
-  id          String        @id @default(uuid())
-  categoryId  String
-  name        String
-  slug        String        @unique
-  description String        @db.Text
-  price       Decimal       @db.Decimal(10, 2)
-  thumbnail   String?
-  filePath    String?
-  status      ProductStatus @default(draft)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String        @id @default(uuid())
+  categoryId    String?
+  name          String
+  slug          String        @unique
+  description   String?
+  price         Decimal       @db.Decimal(10, 2) @default(0)
+  status        ProductStatus @default(draft)
+  thumbnailPath String?
+  filePath      String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now())
 
-  category    Category      @relation(fields: [categoryId], references: [id])
-  orderItems  OrderItem[]
+  category      Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  orderItems    OrderItem[]
+  licenses      License[]
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([slug])
 }
 
 // Orders and Payments
 enum OrderStatus {
   pending
-  processing
   completed
   cancelled
-  refunded
 }
 
 model Order {
-  id          String      @id @default(uuid())
-  profileId   String
-  total       Decimal     @db.Decimal(10, 2)
-  status      OrderStatus @default(pending)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id        String      @id @default(uuid())
+  userId    String
+  status    OrderStatus @default(pending)
+  total     Decimal     @db.Decimal(10, 2) @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @default(now())
 
-  profile     Profile     @relation(fields: [profileId], references: [id])
-  items       OrderItem[]
-  payment     Payment?
-  referrals   Referral[]
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile   Profile     @relation(fields: [id], references: [id])
+  items     OrderItem[]
+  payment   Payment?
+  referrals Referral[]
+  licenses  License[]
+
+  @@index([userId])
+  @@index([status])
 }
 
 model OrderItem {
   id        String  @id @default(uuid())
   orderId   String
   productId String
-  quantity  Int
   price     Decimal @db.Decimal(10, 2)
+  quantity  Int     @default(1)
+  createdAt DateTime @default(now())
 
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 enum PaymentStatus {
   pending
-  processing
-  completed
+  paid
   failed
-  refunded
+  expired
 }
 
 model Payment {
-  id              String        @id @default(uuid())
-  orderId         String        @unique
-  profileId       String
-  amount          Decimal       @db.Decimal(10, 2)
-  status          PaymentStatus @default(pending)
-  paymentMethod   String?
-  midtransOrderId String?       @unique
-  paidAt          DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               String        @id @default(uuid())
+  orderId          String        @unique
+  midtransOrderId  String?       @unique
+  paymentMethod    String?
+  grossAmount      Decimal       @db.Decimal(10, 2)
+  status           PaymentStatus @default(pending)
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
 
-  order           Order         @relation(fields: [orderId], references: [id])
-  profile         Profile       @relation(fields: [profileId], references: [id])
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  profile          Profile       @relation(fields: [id], references: [id])
+
+  @@index([orderId])
+  @@index([midtransOrderId])
+  @@index([status])
 }
 
 // Licenses
 enum LicenseStatus {
   active
   expired
-  revoked
   suspended
 }
 
 model License {
-  id              String         @id @default(uuid())
-  profileId       String
-  productId       String
+  id               String         @id @default(uuid())
+  userId           String
+  productId        String
+  orderId          String?
   licenseKey       String         @unique
-  status          LicenseStatus  @default(active)
-  expiresAt       DateTime?
-  activationLimit Int            @default(3)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  status           LicenseStatus  @default(active)
+  expiresAt        DateTime?
+  activationCount   Int            @default(0)
+  maxActivations    Int            @default(1)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now())
 
-  profile         Profile        @relation(fields: [profileId], references: [id])
-  activations     LicenseActivation[]
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile          Profile        @relation(fields: [id], references: [id])
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order            Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  activations      LicenseActivation[]
+
+  @@index([userId])
+  @@index([productId])
+  @@index([orderId])
+  @@index([licenseKey])
+  @@index([status])
 }
 
 model LicenseActivation {
   id          String   @id @default(uuid())
   licenseId   String
-  deviceId    String
   deviceName  String?
+  domainName  String?
+  ipAddress   String?
   activatedAt DateTime @default(now())
 
-  license     License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license     License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
-  @@unique([licenseId, deviceId])
+  @@index([licenseId])
 }
 
 // Affiliate System
@@ -227,68 +212,68 @@ enum ReferralStatus {
 
 model Affiliate {
   id              String           @id @default(uuid())
-  profileId       String           @unique
+  userId          String
   affiliateCode   String           @unique
   status          AffiliateStatus  @default(pending)
   commissionRate  Decimal          @db.Decimal(5, 2) @default(10.00)
   createdAt       DateTime         @default(now())
 
-  profile         Profile          @relation(fields: [profileId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile         Profile          @relation(fields: [id], references: [id])
   referralClicks  ReferralClick[]
   referrals       Referral[]
   notifications   AffiliateNotification[]
+
+  @@index([userId])
+  @@index([affiliateCode])
+  @@index([status])
 }
 
 model ReferralClick {
   id          String   @id @default(uuid())
   affiliateId String
-  profileId   String
   ipAddress   String?
   userAgent   String?
   createdAt   DateTime @default(now())
 
   affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  profile     Profile   @relation(fields: [profileId], references: [id])
+  profile     Profile   @relation(fields: [id], references: [id])
+
+  @@index([affiliateId])
 }
 
 model Referral {
-  id              String         @id @default(uuid())
-  affiliateId     String
-  orderId         String
-  profileId       String
-  commissionAmount Decimal        @db.Decimal(10, 2) @default(0)
-  status          ReferralStatus @default(pending)
-  createdAt       DateTime       @default(now())
+  id                String         @id @default(uuid())
+  affiliateId       String
+  orderId           String
+  commissionAmount  Decimal        @db.Decimal(10, 2) @default(0)
+  status            ReferralStatus @default(pending)
+  createdAt         DateTime       @default(now())
 
-  affiliate       Affiliate      @relation(fields: [affiliateId], references: [id])
-  order           Order          @relation(fields: [orderId], references: [id])
-  profile         Profile        @relation(fields: [profileId], references: [id])
+  affiliate         Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  order             Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([orderId])
+  @@index([status])
 }
 
 model AffiliateNotification {
   id          String   @id @default(uuid())
   affiliateId String
-  profileId   String
   title       String
-  message     String   @db.Text
+  message     String
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  profile     Profile   @relation(fields: [profileId], references: [id])
+  profile     Profile   @relation(fields: [id], references: [id])
+
+  @@index([affiliateId])
+  @@index([isRead])
 }
 
 // Logging
-enum EmailType {
-  welcome
-  purchase_success
-  license_generated
-  affiliate_approved
-  referral_sale
-  commission_created
-  test
-}
-
 enum EmailStatus {
   pending
   sent
@@ -298,11 +283,14 @@ enum EmailStatus {
 model EmailLog {
   id           String      @id @default(uuid())
   userId       String?
-  emailType    EmailType
+  emailType    String
   status       EmailStatus @default(pending)
   sentAt       DateTime?
-  errorMessage String?     @db.Text
+  errorMessage String?
   createdAt    DateTime    @default(now())
+
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  profile      Profile     @relation(fields: [id], references: [id])
 
   @@index([userId])
   @@index([emailType])
@@ -310,25 +298,32 @@ model EmailLog {
 }
 
 model WebhookLog {
-  id          String   @id @default(uuid())
-  eventType   String
-  payload     String   @db.Text
-  response    String?  @db.Text
-  statusCode  Int?
-  createdAt   DateTime @default(now())
+  id             String    @id @default(uuid())
+  webhookType    String
+  payload        Json?
+  responseStatus Int?
+  responseBody   String?
+  errorMessage   String?
+  createdAt      DateTime  @default(now())
 
-  @@index([eventType])
+  @@index([webhookType])
   @@index([createdAt])
 }
 
 model ErrorLog {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
+  errorType   String
+  errorMessage String?
+  stackTrace  String?
   userId      String?
-  error       String   @db.Text
-  stackTrace  String?  @db.Text
   path        String?
-  createdAt   DateTime @default(now())
+  metadata    Json?
+  createdAt   DateTime  @default(now())
 
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  profile     Profile   @relation(fields: [id], references: [id])
+
+  @@index([errorType])
   @@index([userId])
   @@index([createdAt])
 }
