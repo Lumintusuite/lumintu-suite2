@@ -1,6 +1,6 @@
-import type { Payment } from "@/lib/supabase/types";
+import type { Payment } from "@/lib/types";
 
-export type { Payment };
+export type { Payment } from "@/lib/types";
 
 export type PaymentActionState = {
   error?: string;

@@ -1,6 +1,6 @@
-import type { Order, OrderItem, OrderWithItems } from "@/lib/supabase/types";
+import type { Order, OrderItem, OrderWithItems } from "@/lib/types";
 
-export type { Order, OrderItem, OrderWithItems };
+export type { Order, OrderItem, OrderWithItems } from "@/lib/types";
 
 export type OrderActionState = {
   error?: string;

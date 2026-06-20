@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getAffiliateByUserId, listNotifications, markNotificationAsRead } from "@/lib/affiliates/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,23 +46,23 @@ export default async function MemberNotificationsPage({
               <div
                 key={notification.id}
                 className={`rounded-lg border p-4 ${
-                  !notification.is_read ? "bg-blue-50" : ""
+                  !notification.isRead ? "bg-blue-50" : ""
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{notification.title}</h3>
-                      {!notification.is_read && (
+                      {!notification.isRead && (
                         <Badge variant="secondary">New</Badge>
                       )}
                     </div>
                     <p className="mt-2 text-gray-600">{notification.message}</p>
                     <p className="mt-2 text-sm text-gray-500">
-                      {new Date(notification.created_at).toLocaleString()}
+                      {new Date(notification.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  {!notification.is_read && (
+                  {!notification.isRead && (
                     <form
                       action={async () => {
                         "use server";

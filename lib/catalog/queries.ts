@@ -1,11 +1,11 @@
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import type { AuthUser } from "@/lib/auth/types";
 import {
   DEFAULT_PAGE_SIZE,
   type PaginatedResult,
 } from "@/lib/catalog/types";
-import { createClient } from "@/lib/supabase/server";
-import type { Category, ProductWithCategory } from "@/lib/supabase/types";
+import { categoryRepository, productRepository } from "@/lib/db/product-repository";
+import { ProductStatus } from "@prisma/client";
 
 export async function requireAdmin(): Promise<
   { user: AuthUser } | { error: string }
@@ -16,7 +16,7 @@ export async function requireAdmin(): Promise<
     return { error: "You must be signed in." };
   }
 
-  if (user.profile.role !== "admin") {
+  if (user.role !== "admin") {
     return { error: "Admin access required." };
   }
 
@@ -39,30 +39,25 @@ export async function listCategories({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   search = "",
-}: ListParams = {}): Promise<PaginatedResult<Category>> {
-  const supabase = await createClient();
+}: ListParams = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("categories")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let categories = await categoryRepository.getAllCategories();
 
   if (search.trim()) {
-    const term = `%${search.trim()}%`;
-    query = query.or(`name.ilike.${term},slug.ilike.${term}`);
+    const term = search.trim().toLowerCase();
+    categories = categories.filter(
+      (cat) =>
+        cat.name.toLowerCase().includes(term) ||
+        cat.slug.toLowerCase().includes(term)
+    );
   }
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = categories.length;
+  const items = categories.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Category[],
+    items,
     total,
     page,
     pageSize,
@@ -70,65 +65,32 @@ export async function listCategories({
   };
 }
 
-export async function getCategoryById(id: string): Promise<Category | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as Category | null) ?? null;
+export async function getCategoryById(id: string): Promise<any | null> {
+  return categoryRepository.getCategoryById(id);
 }
 
-export async function listAllCategories(): Promise<Category[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("categories")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? []) as Category[];
+export async function listAllCategories(): Promise<any[]> {
+  return categoryRepository.getAllCategories();
 }
 
 export async function listProducts({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   search = "",
-}: ListParams = {}): Promise<PaginatedResult<ProductWithCategory>> {
-  const supabase = await createClient();
+}: ListParams = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("products")
-    .select("*, categories(id, name, slug)", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let products = await productRepository.getAllProducts();
 
   if (search.trim()) {
-    const term = `%${search.trim()}%`;
-    query = query.or(`name.ilike.${term},slug.ilike.${term}`);
+    products = await productRepository.getAllProducts({ search: search.trim() });
   }
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = products.length;
+  const items = products.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as ProductWithCategory[],
+    items,
     total,
     page,
     pageSize,
@@ -138,20 +100,8 @@ export async function listProducts({
 
 export async function getProductById(
   id: string
-): Promise<ProductWithCategory | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("products")
-    .select("*, categories(id, name, slug)")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as ProductWithCategory | null) ?? null;
+): Promise<any | null> {
+  return productRepository.getProductById(id);
 }
 
 export async function getCatalogStats(): Promise<{
@@ -159,20 +109,15 @@ export async function getCatalogStats(): Promise<{
   productCount: number;
   publishedCount: number;
 }> {
-  const supabase = await createClient();
-
-  const [categories, products, published] = await Promise.all([
-    supabase.from("categories").select("*", { count: "exact", head: true }),
-    supabase.from("products").select("*", { count: "exact", head: true }),
-    supabase
-      .from("products")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "published"),
+  const [categoryCount, productCount, publishedCount] = await Promise.all([
+    categoryRepository.getCategoriesCount(),
+    productRepository.getProductsCount(),
+    productRepository.getProductsCount({ status: ProductStatus.published }),
   ]);
 
   return {
-    categoryCount: categories.count ?? 0,
-    productCount: products.count ?? 0,
-    publishedCount: published.count ?? 0,
+    categoryCount,
+    productCount,
+    publishedCount,
   };
 }

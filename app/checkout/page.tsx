@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { createPendingOrder } from "@/lib/orders/actions";
 import { createPayment } from "@/lib/payments/actions";
 import { getMidtransClientKey } from "@/lib/payments/midtrans";

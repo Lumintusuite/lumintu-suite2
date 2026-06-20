@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listReferrals } from "@/lib/affiliates/queries";
 import { updateReferralStatus } from "@/lib/affiliates/actions";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export default async function AdminReferralsPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -65,16 +65,16 @@ export default async function AdminReferralsPage({
                 {result.items.map((referral: any) => (
                   <TableRow key={referral.id}>
                     <TableCell className="font-mono text-sm">
-                      {referral.affiliate_id.slice(0, 8)}...
+                      {referral.affiliateId.slice(0, 8)}...
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {referral.order_id.slice(0, 8)}...
+                      {referral.orderId.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
-                      ${(referral.orders?.total || 0).toFixed(2)}
+                      ${(referral.order?.total || 0).toFixed(2)}
                     </TableCell>
                     <TableCell className="font-bold">
-                      ${referral.commission_amount.toFixed(2)}
+                      ${referral.commissionAmount.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -88,7 +88,7 @@ export default async function AdminReferralsPage({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {new Date(referral.created_at).toLocaleDateString()}
+                      {new Date(referral.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <form

@@ -9,18 +9,64 @@ datasource db {
   provider = "postgresql"
 }
 
-// User (migrated from auth.users)
+// User (migrated from auth.users, enhanced for Auth.js)
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
+  id            String    @id @default(uuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(member)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   
-  profile   Profile?
-  orders    Order[]
-  licenses  License[]
-  affiliates Affiliate[]
-  emailLogs EmailLog[]
-  errorLogs ErrorLog[]
+  profile       Profile?
+  accounts      Account[]
+  sessions      Session[]
+  orders        Order[]
+  licenses      License[]
+  affiliates    Affiliate[]
+  emailLogs     EmailLog[]
+  errorLogs     ErrorLog[]
+}
+
+// Auth.js Account model
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// Auth.js Session model
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Auth.js VerificationToken model
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // Profiles and Roles
@@ -32,14 +78,13 @@ enum UserRole {
 model Profile {
   id        String   @id
   fullName  String?
-  role      UserRole @default(member)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
 
   user     User     @relation(fields: [id], references: [id], onDelete: Cascade)
-  orders   Order[]
-  payments Payment[]
-  licenses License[]
+  orders   Order?
+  payments Payment?
+  licenses License?
   affiliate Affiliate?
   referralClicks ReferralClick[]
   affiliateNotifications AffiliateNotification[]
@@ -96,13 +141,14 @@ enum OrderStatus {
 model Order {
   id        String      @id @default(uuid())
   userId    String
+  profileId String      @unique
   status    OrderStatus @default(pending)
   total     Decimal     @db.Decimal(10, 2) @default(0)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @default(now())
 
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profile   Profile     @relation(fields: [id], references: [id])
+  profile   Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
   items     OrderItem[]
   payment   Payment?
   referrals Referral[]
@@ -110,6 +156,7 @@ model Order {
 
   @@index([userId])
   @@index([status])
+  @@index([profileId])
 }
 
 model OrderItem {
@@ -137,6 +184,7 @@ enum PaymentStatus {
 model Payment {
   id               String        @id @default(uuid())
   orderId          String        @unique
+  profileId        String        @unique
   midtransOrderId  String?       @unique
   paymentMethod    String?
   grossAmount      Decimal       @db.Decimal(10, 2)
@@ -145,11 +193,12 @@ model Payment {
   createdAt        DateTime      @default(now())
 
   order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  profile          Profile       @relation(fields: [id], references: [id])
+  profile          Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([midtransOrderId])
   @@index([status])
+  @@index([profileId])
 }
 
 // Licenses
@@ -162,6 +211,7 @@ enum LicenseStatus {
 model License {
   id               String         @id @default(uuid())
   userId           String
+  profileId        String         @unique
   productId        String
   orderId          String?
   licenseKey       String         @unique
@@ -173,12 +223,13 @@ model License {
   updatedAt        DateTime       @default(now())
 
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profile          Profile        @relation(fields: [id], references: [id])
+  profile          Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
   product          Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   order            Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
   activations      LicenseActivation[]
 
   @@index([userId])
+  @@index([profileId])
   @@index([productId])
   @@index([orderId])
   @@index([licenseKey])
@@ -213,18 +264,20 @@ enum ReferralStatus {
 model Affiliate {
   id              String           @id @default(uuid())
   userId          String
+  profileId       String           @unique
   affiliateCode   String           @unique
   status          AffiliateStatus  @default(pending)
   commissionRate  Decimal          @db.Decimal(5, 2) @default(10.00)
   createdAt       DateTime         @default(now())
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profile         Profile          @relation(fields: [id], references: [id])
+  profile         Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
   referralClicks  ReferralClick[]
   referrals       Referral[]
   notifications   AffiliateNotification[]
 
   @@index([userId])
+  @@index([profileId])
   @@index([affiliateCode])
   @@index([status])
 }
@@ -232,14 +285,16 @@ model Affiliate {
 model ReferralClick {
   id          String   @id @default(uuid())
   affiliateId String
+  profileId   String
   ipAddress   String?
   userAgent   String?
   createdAt   DateTime @default(now())
 
   affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  profile     Profile   @relation(fields: [id], references: [id])
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([affiliateId])
+  @@index([profileId])
 }
 
 model Referral {
@@ -261,15 +316,17 @@ model Referral {
 model AffiliateNotification {
   id          String   @id @default(uuid())
   affiliateId String
+  profileId   String
   title       String
   message     String
   isRead      Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   affiliate   Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
-  profile     Profile   @relation(fields: [id], references: [id])
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([affiliateId])
+  @@index([profileId])
   @@index([isRead])
 }
 
@@ -283,6 +340,7 @@ enum EmailStatus {
 model EmailLog {
   id           String      @id @default(uuid())
   userId       String?
+  profileId    String?
   emailType    String
   status       EmailStatus @default(pending)
   sentAt       DateTime?
@@ -290,9 +348,10 @@ model EmailLog {
   createdAt    DateTime    @default(now())
 
   user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  profile      Profile     @relation(fields: [id], references: [id])
+  profile      Profile?    @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([profileId])
   @@index([emailType])
   @@index([status])
 }
@@ -316,14 +375,16 @@ model ErrorLog {
   errorMessage String?
   stackTrace  String?
   userId      String?
+  profileId   String?
   path        String?
   metadata    Json?
   createdAt   DateTime  @default(now())
 
   user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  profile     Profile   @relation(fields: [id], references: [id])
+  profile     Profile?  @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([errorType])
   @@index([userId])
+  @@index([profileId])
   @@index([createdAt])
 }

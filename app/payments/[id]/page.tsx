@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getPaymentById } from "@/lib/payments/queries";
+import { getOrderById } from "@/lib/orders/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,20 +24,13 @@ export default async function PaymentDetailPage({
   }
 
   // Verify the payment belongs to the user or user is admin
-  const isAdmin = user.profile.role === "admin";
+  const isAdmin = user.role === "admin";
   
   if (!isAdmin) {
     // Check if payment belongs to user by checking the order
-    const { createClient } = await import("@/lib/supabase/server");
-    const supabase = await createClient();
+    const order = await getOrderById(payment.orderId);
     
-    const { data: order } = await supabase
-      .from("orders")
-      .select("user_id")
-      .eq("id", payment.order_id)
-      .single();
-    
-    if (!order || order.user_id !== user.id) {
+    if (!order || order.userId !== user.id) {
       redirect("/payments");
     }
   }
@@ -55,17 +49,17 @@ export default async function PaymentDetailPage({
         <div className="space-y-2">
           <div className="flex justify-between">
             <span className="text-gray-600">Order ID:</span>
-            <span className="font-mono">{payment.order_id}</span>
+            <span className="font-mono">{payment.orderId}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Midtrans Order ID:</span>
             <span className="font-mono">
-              {payment.midtrans_order_id || "-"}
+              {payment.midtransOrderId || "-"}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Payment Method:</span>
-            <span>{payment.payment_method || "-"}</span>
+            <span>{payment.paymentMethod || "-"}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Status:</span>
@@ -84,17 +78,17 @@ export default async function PaymentDetailPage({
           <div className="flex justify-between">
             <span className="text-gray-600">Gross Amount:</span>
             <span className="text-2xl font-bold">
-              ${payment.gross_amount.toFixed(2)}
+              ${payment.grossAmount.toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Created At:</span>
-            <span>{new Date(payment.created_at).toLocaleString()}</span>
+            <span>{new Date(payment.createdAt).toLocaleString()}</span>
           </div>
-          {payment.paid_at && (
+          {payment.paidAt && (
             <div className="flex justify-between">
               <span className="text-gray-600">Paid At:</span>
-              <span>{new Date(payment.paid_at).toLocaleString()}</span>
+              <span>{new Date(payment.paidAt).toLocaleString()}</span>
             </div>
           )}
         </div>

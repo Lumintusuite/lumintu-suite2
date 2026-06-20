@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getAffiliateById, getReferralStats } from "@/lib/affiliates/queries";
 import { updateAffiliateStatus, updateCommissionRate } from "@/lib/affiliates/actions";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default async function AdminAffiliateDetailPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -39,7 +39,7 @@ export default async function AdminAffiliateDetailPage({
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">Affiliate Details</h1>
         <p className="text-gray-600">
-          Affiliate Code: <span className="font-mono">{affiliate.affiliate_code}</span>
+          Affiliate Code: <span className="font-mono">{affiliate.affiliateCode}</span>
         </p>
       </div>
 
@@ -67,11 +67,11 @@ export default async function AdminAffiliateDetailPage({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Commission Rate:</span>
-              <span>{affiliate.commission_rate}%</span>
+              <span>{affiliate.commissionRate}%</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Joined:</span>
-              <span>{new Date(affiliate.created_at).toLocaleString()}</span>
+              <span>{new Date(affiliate.createdAt).toLocaleString()}</span>
             </div>
           </div>
 
@@ -120,7 +120,7 @@ export default async function AdminAffiliateDetailPage({
                   step="0.01"
                   min="0"
                   max="100"
-                  defaultValue={affiliate.commission_rate}
+                  defaultValue={affiliate.commissionRate}
                 />
               </div>
               <Button type="submit" className="mt-2">

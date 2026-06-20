@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getLicenseById, getLicenseActivations } from "@/lib/licenses/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +23,9 @@ export default async function LicenseDetailPage({
   }
 
   // Verify the license belongs to the user or user is admin
-  const isAdmin = user.profile.role === "admin";
+  const isAdmin = user.role === "admin";
   
-  if (!isAdmin && license.user_id !== user.id) {
+  if (!isAdmin && license.userId !== user.id) {
     redirect("/licenses");
   }
 
@@ -36,7 +36,7 @@ export default async function LicenseDetailPage({
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">License Details</h1>
         <p className="text-gray-600">
-          License Key: <span className="font-mono">{license.license_key}</span>
+          License Key: <span className="font-mono">{license.licenseKey}</span>
         </p>
       </div>
 
@@ -46,7 +46,7 @@ export default async function LicenseDetailPage({
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">Product:</span>
-              <span>{(license as any).products?.name || "-"}</span>
+              <span>{(license as any).product?.name || "-"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Status:</span>
@@ -65,27 +65,27 @@ export default async function LicenseDetailPage({
             <div className="flex justify-between">
               <span className="text-gray-600">Activations:</span>
               <span>
-                {license.activation_count}/{license.max_activations}
+                {license.activationCount}/{license.maxActivations}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Expires At:</span>
               <span>
-                {license.expires_at
-                  ? new Date(license.expires_at).toLocaleString()
+                {license.expiresAt
+                  ? new Date(license.expiresAt).toLocaleString()
                   : "Never"}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Created At:</span>
-              <span>{new Date(license.created_at).toLocaleString()}</span>
+              <span>{new Date(license.createdAt).toLocaleString()}</span>
             </div>
           </div>
 
           <div className="mt-6">
             <Button
               onClick={() => {
-                navigator.clipboard.writeText(license.license_key);
+                navigator.clipboard.writeText(license.licenseKey);
               }}
             >
               Copy License Key
@@ -99,27 +99,27 @@ export default async function LicenseDetailPage({
             <p className="text-gray-600">No activations yet</p>
           ) : (
             <div className="space-y-2">
-              {activations.map((activation) => (
+              {activations.map((activation: any) => (
                 <div
                   key={activation.id}
                   className="rounded-lg border p-3"
                 >
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">
-                      Device: {activation.device_name || "-"}
+                      Device: {activation.deviceName || "-"}
                     </span>
                     <span className="text-sm text-gray-600">
-                      {new Date(activation.activated_at).toLocaleString()}
+                      {new Date(activation.activatedAt).toLocaleString()}
                     </span>
                   </div>
-                  {activation.domain_name && (
+                  {activation.domainName && (
                     <p className="text-sm text-gray-600">
-                      Domain: {activation.domain_name}
+                      Domain: {activation.domainName}
                     </p>
                   )}
-                  {activation.ip_address && (
+                  {activation.ipAddress && (
                     <p className="text-sm text-gray-600">
-                      IP: {activation.ip_address}
+                      IP: {activation.ipAddress}
                     </p>
                   )}
                 </div>

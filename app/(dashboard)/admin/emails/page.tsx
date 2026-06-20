@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listEmailLogs, getEmailStats } from "@/lib/emails/queries";
 import { sendTestEmail } from "@/lib/emails/actions";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export default async function AdminEmailsPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -115,10 +115,10 @@ export default async function AdminEmailsPage({
                 {result.items.map((log: any) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-mono text-sm">
-                      {log.email_type}
+                      {log.emailType}
                     </TableCell>
                     <TableCell>
-                      {log.profiles?.email || "-"}
+                      {log.profile?.email || "-"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -134,15 +134,15 @@ export default async function AdminEmailsPage({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {log.sent_at
-                        ? new Date(log.sent_at).toLocaleString()
+                      {log.sentAt
+                        ? new Date(log.sentAt).toLocaleString()
                         : "-"}
                     </TableCell>
                     <TableCell className="max-w-xs truncate text-sm text-red-600">
-                      {log.error_message || "-"}
+                      {log.errorMessage || "-"}
                     </TableCell>
                     <TableCell>
-                      {new Date(log.created_at).toLocaleString()}
+                      {new Date(log.createdAt).toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))}

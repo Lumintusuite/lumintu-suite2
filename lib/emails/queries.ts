@@ -1,11 +1,10 @@
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import type { AuthUser } from "@/lib/auth/types";
 import {
   DEFAULT_PAGE_SIZE,
   type PaginatedResult,
 } from "@/lib/catalog/types";
-import { createClient } from "@/lib/supabase/server";
-import type { EmailLog } from "@/lib/supabase/types";
+import { loggingRepository } from "@/lib/db/logging-repository";
 
 export async function requireAuthenticated(): Promise<
   { user: AuthUser } | { error: string }
@@ -28,7 +27,7 @@ export async function requireAdmin(): Promise<
     return { error: "You must be signed in." };
   }
 
-  if (user.profile.role !== "admin") {
+  if (user.role !== "admin") {
     return { error: "Admin access required." };
   }
 
@@ -51,30 +50,22 @@ export async function listEmailLogs({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   search = "",
-}: ListParams = {}): Promise<PaginatedResult<EmailLog>> {
-  const supabase = await createClient();
+}: ListParams = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("email_logs")
-    .select("*, profiles(id, full_name, email)", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let emailLogs = await loggingRepository.getAllEmailLogs();
 
   if (search.trim()) {
-    const term = `%${search.trim()}%`;
-    query = query.or(`email_type.ilike.${term}`);
+    emailLogs = emailLogs.filter((log: any) => 
+      log.emailType?.toLowerCase().includes(search.trim().toLowerCase())
+    );
   }
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = emailLogs.length;
+  const items = emailLogs.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as EmailLog[],
+    items,
     total,
     page,
     pageSize,
@@ -85,25 +76,16 @@ export async function listEmailLogs({
 export async function listUserEmailLogs(
   userId: string,
   { page = 1, pageSize = DEFAULT_PAGE_SIZE }: Omit<ListParams, "search"> = {}
-): Promise<PaginatedResult<EmailLog>> {
-  const supabase = await createClient();
+): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  const { data, error, count } = await supabase
-    .from("email_logs")
-    .select("*", { count: "exact" })
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  let emailLogs = await loggingRepository.getEmailLogsByUserId(userId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = emailLogs.length;
+  const items = emailLogs.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as EmailLog[],
+    items,
     total,
     page,
     pageSize,
@@ -117,28 +99,17 @@ export async function getEmailStats(): Promise<{
   failedEmails: number;
   pendingEmails: number;
 }> {
-  const supabase = await createClient();
-
-  const [total, sent, failed, pending] = await Promise.all([
-    supabase.from("email_logs").select("*", { count: "exact", head: true }),
-    supabase
-      .from("email_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "sent"),
-    supabase
-      .from("email_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "failed"),
-    supabase
-      .from("email_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
+  const [totalEmails, sentEmails, failedEmails, pendingEmails] = await Promise.all([
+    loggingRepository.getEmailLogsCount(),
+    loggingRepository.getEmailLogsCount({ status: "sent" }),
+    loggingRepository.getEmailLogsCount({ status: "failed" }),
+    loggingRepository.getEmailLogsCount({ status: "pending" }),
   ]);
 
   return {
-    totalEmails: total.count ?? 0,
-    sentEmails: sent.count ?? 0,
-    failedEmails: failed.count ?? 0,
-    pendingEmails: pending.count ?? 0,
+    totalEmails,
+    sentEmails,
+    failedEmails,
+    pendingEmails,
   };
 }

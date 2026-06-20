@@ -10,7 +10,9 @@ import {
 } from "@/lib/orders/schemas";
 import type { OrderActionState } from "@/lib/orders/types";
 import { requireAuthenticated, requireAdmin } from "@/lib/orders/queries";
-import { createClient } from "@/lib/supabase/server";
+import { orderRepository } from "@/lib/db/order-repository";
+import { productRepository } from "@/lib/db/product-repository";
+import { OrderStatus } from "@prisma/client";
 
 const CHECKOUT_PATH = "/checkout";
 const ORDERS_PATH = "/orders";
@@ -45,26 +47,20 @@ export async function createOrder(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
   // Calculate total and verify products exist and are published
   let total = 0;
   const productIds = parsed.data.items.map((item) => item.productId);
 
-  const { data: products, error: productsError } = await supabase
-    .from("products")
-    .select("id, price, status")
-    .in("id", productIds);
+  const products = await Promise.all(
+    productIds.map((id) => productRepository.getProductById(id))
+  );
 
-  if (productsError || !products) {
+  if (products.some((p) => !p)) {
     return { error: "Failed to verify products." };
   }
 
   const productMap = new Map(
-    products.map((p: { id: string; price: number; status: string }) => [
-      p.id,
-      p,
-    ])
+    products.map((p) => [p!.id, p])
   );
 
   for (const item of parsed.data.items) {
@@ -78,40 +74,24 @@ export async function createOrder(
       return { error: `Product ${item.productId} is not available for purchase.` };
     }
 
-    total += product.price * item.quantity;
+    total += Number(product.price) * item.quantity;
   }
 
   // Create order
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      user_id: auth.user.id,
+  let order;
+  try {
+    order = await orderRepository.createOrder({
+      userId: auth.user.id,
       total,
-      status: "completed",
-    })
-    .select("id")
-    .single();
-
-  if (orderError || !order) {
-    return { error: orderError?.message ?? "Failed to create order." };
-  }
-
-  // Create order items
-  const orderItems = parsed.data.items.map((item) => ({
-    order_id: order.id,
-    product_id: item.productId,
-    price: productMap.get(item.productId)!.price as number,
-    quantity: item.quantity,
-  }));
-
-  const { error: itemsError } = await supabase
-    .from("order_items")
-    .insert(orderItems);
-
-  if (itemsError) {
-    // Rollback order if items fail
-    await supabase.from("orders").delete().eq("id", order.id);
-    return { error: itemsError.message };
+      status: OrderStatus.completed,
+      items: parsed.data.items.map((item) => ({
+        productId: item.productId,
+        price: Number(productMap.get(item.productId)!.price),
+        quantity: item.quantity,
+      })),
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to create order." };
   }
 
   revalidatePath(ORDERS_PATH);
@@ -134,26 +114,20 @@ export async function createPendingOrder(
     return { error: "Invalid order items." };
   }
 
-  const supabase = await createClient();
-
   // Calculate total and verify products exist and are published
   let total = 0;
   const productIds = parsed.data.items.map((item) => item.productId);
 
-  const { data: products, error: productsError } = await supabase
-    .from("products")
-    .select("id, price, status")
-    .in("id", productIds);
+  const products = await Promise.all(
+    productIds.map((id) => productRepository.getProductById(id))
+  );
 
-  if (productsError || !products) {
+  if (products.some((p) => !p)) {
     return { error: "Failed to verify products." };
   }
 
   const productMap = new Map(
-    products.map((p: { id: string; price: number; status: string }) => [
-      p.id,
-      p,
-    ])
+    products.map((p) => [p!.id, p])
   );
 
   for (const item of parsed.data.items) {
@@ -167,40 +141,24 @@ export async function createPendingOrder(
       return { error: `Product ${item.productId} is not available for purchase.` };
     }
 
-    total += product.price * item.quantity;
+    total += Number(product.price) * item.quantity;
   }
 
   // Create order with pending status
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      user_id: auth.user.id,
+  let order;
+  try {
+    order = await orderRepository.createOrder({
+      userId: auth.user.id,
       total,
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  if (orderError || !order) {
-    return { error: orderError?.message ?? "Failed to create order." };
-  }
-
-  // Create order items
-  const orderItems = parsed.data.items.map((item) => ({
-    order_id: order.id,
-    product_id: item.productId,
-    price: productMap.get(item.productId)!.price as number,
-    quantity: item.quantity,
-  }));
-
-  const { error: itemsError } = await supabase
-    .from("order_items")
-    .insert(orderItems);
-
-  if (itemsError) {
-    // Rollback order if items fail
-    await supabase.from("orders").delete().eq("id", order.id);
-    return { error: itemsError.message };
+      status: OrderStatus.pending,
+      items: parsed.data.items.map((item) => ({
+        productId: item.productId,
+        price: Number(productMap.get(item.productId)!.price),
+        quantity: item.quantity,
+      })),
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to create order." };
   }
 
   revalidatePath(ORDERS_PATH);
@@ -232,15 +190,12 @@ export async function updateOrderStatus(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("orders")
-    .update({ status: parsed.data.status })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await orderRepository.updateOrder(id, {
+      status: parsed.data.status as OrderStatus,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update order status." };
   }
 
   revalidatePath(ADMIN_ORDERS_PATH);
@@ -261,34 +216,25 @@ export async function cancelOrder(
     return { error: "Order ID is required." };
   }
 
-  const supabase = await createClient();
-
-  // Verify order belongs to user
-  const { data: order, error: fetchError } = await supabase
-    .from("orders")
-    .select("user_id, status")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (fetchError || !order) {
-    return { error: fetchError?.message ?? "Order not found." };
+  const order = await orderRepository.getOrderById(id);
+  if (!order) {
+    return { error: "Order not found." };
   }
 
-  if (order.user_id !== auth.user.id) {
+  if (order.userId !== auth.user.id) {
     return { error: "You can only cancel your own orders." };
   }
 
-  if (order.status !== "pending") {
+  if (order.status !== OrderStatus.pending) {
     return { error: "Only pending orders can be cancelled." };
   }
 
-  const { error } = await supabase
-    .from("orders")
-    .update({ status: "cancelled" })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await orderRepository.updateOrder(id, {
+      status: OrderStatus.cancelled,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to cancel order." };
   }
 
   revalidatePath(ORDERS_PATH);

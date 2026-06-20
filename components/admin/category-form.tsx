@@ -16,7 +16,7 @@ import {
 } from "@/lib/catalog/actions";
 import type { CatalogActionState } from "@/lib/catalog/types";
 import { slugify } from "@/lib/catalog/utils";
-import type { Category } from "@/lib/supabase/types";
+import type { Category } from "@/lib/types";
 
 const initialState: CatalogActionState = {};
 

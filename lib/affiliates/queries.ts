@@ -1,11 +1,11 @@
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import type { AuthUser } from "@/lib/auth/types";
 import {
   DEFAULT_PAGE_SIZE,
   type PaginatedResult,
 } from "@/lib/catalog/types";
-import { createClient } from "@/lib/supabase/server";
-import type { Affiliate, Referral, ReferralClick, AffiliateNotification } from "@/lib/supabase/types";
+import { affiliateRepository } from "@/lib/db/affiliate-repository";
+import { AffiliateStatus, ReferralStatus } from "@prisma/client";
 
 export async function requireAuthenticated(): Promise<
   { user: AuthUser } | { error: string }
@@ -28,7 +28,7 @@ export async function requireAdmin(): Promise<
     return { error: "You must be signed in." };
   }
 
-  if (user.profile.role !== "admin") {
+  if (user.role !== "admin") {
     return { error: "Admin access required." };
   }
 
@@ -51,30 +51,20 @@ export async function listAffiliates({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   search = "",
-}: ListParams = {}): Promise<PaginatedResult<Affiliate>> {
-  const supabase = await createClient();
+}: ListParams = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("affiliates")
-    .select("*, profiles(id, full_name, email)", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let affiliates = await affiliateRepository.getAllAffiliates();
 
   if (search.trim()) {
-    const term = `%${search.trim()}%`;
-    query = query.or(`affiliate_code.ilike.${term}`);
+    affiliates = await affiliateRepository.getAllAffiliates({ search: search.trim() });
   }
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = affiliates.length;
+  const items = affiliates.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Affiliate[],
+    items,
     total,
     page,
     pageSize,
@@ -84,85 +74,40 @@ export async function listAffiliates({
 
 export async function getAffiliateByUserId(
   userId: string
-): Promise<Affiliate | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("affiliates")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as Affiliate | null) ?? null;
+): Promise<any | null> {
+  return affiliateRepository.getAffiliateByUserId(userId);
 }
 
 export async function getAffiliateByCode(
   affiliateCode: string
-): Promise<Affiliate | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("affiliates")
-    .select("*")
-    .eq("affiliate_code", affiliateCode)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as Affiliate | null) ?? null;
+): Promise<any | null> {
+  return affiliateRepository.getAffiliateByCode(affiliateCode);
 }
 
 export async function getAffiliateById(
   id: string
-): Promise<Affiliate | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("affiliates")
-    .select("*, profiles(id, full_name, email)")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as Affiliate | null) ?? null;
+): Promise<any | null> {
+  return affiliateRepository.getAffiliateById(id);
 }
 
 export async function listReferrals({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   affiliateId,
-}: ListParams & { affiliateId?: string } = {}): Promise<PaginatedResult<Referral>> {
-  const supabase = await createClient();
+}: ListParams & { affiliateId?: string } = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("referrals")
-    .select("*, affiliates!inner(user_id), orders!inner(total, created_at)", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let referrals = await affiliateRepository.getAllReferrals();
 
   if (affiliateId) {
-    query = query.eq("affiliate_id", affiliateId);
+    referrals = referrals.filter(r => r.affiliateId === affiliateId);
   }
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = referrals.length;
+  const items = referrals.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Referral[],
+    items,
     total,
     page,
     pageSize,
@@ -177,32 +122,24 @@ export async function getReferralStats(affiliateId: string): Promise<{
   pendingCommission: number;
   approvedCommission: number;
 }> {
-  const supabase = await createClient();
-
   const [clicks, referrals] = await Promise.all([
-    supabase
-      .from("referral_clicks")
-      .select("*", { count: "exact", head: true })
-      .eq("affiliate_id", affiliateId),
-    supabase
-      .from("referrals")
-      .select("commission_amount, status")
-      .eq("affiliate_id", affiliateId),
+    affiliateRepository.getReferralClicksCount(affiliateId),
+    affiliateRepository.getAllReferrals({ affiliateId }),
   ]);
 
-  const totalClicks = clicks.count ?? 0;
-  const totalReferrals = referrals.data?.length ?? 0;
+  const totalClicks = clicks;
+  const totalReferrals = referrals.length;
 
   let totalCommission = 0;
   let pendingCommission = 0;
   let approvedCommission = 0;
 
-  for (const referral of referrals.data ?? []) {
-    totalCommission += referral.commission_amount;
-    if (referral.status === "pending") {
-      pendingCommission += referral.commission_amount;
-    } else if (referral.status === "approved") {
-      approvedCommission += referral.commission_amount;
+  for (const referral of referrals) {
+    totalCommission += Number(referral.commissionAmount);
+    if (referral.status === ReferralStatus.pending) {
+      pendingCommission += Number(referral.commissionAmount);
+    } else if (referral.status === ReferralStatus.approved) {
+      approvedCommission += Number(referral.commissionAmount);
     }
   }
 
@@ -218,25 +155,16 @@ export async function getReferralStats(affiliateId: string): Promise<{
 export async function listNotifications(
   affiliateId: string,
   { page = 1, pageSize = DEFAULT_PAGE_SIZE }: Omit<ListParams, "search"> = {}
-): Promise<PaginatedResult<AffiliateNotification>> {
-  const supabase = await createClient();
+): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  const { data, error, count } = await supabase
-    .from("affiliate_notifications")
-    .select("*", { count: "exact" })
-    .eq("affiliate_id", affiliateId)
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  let notifications = await affiliateRepository.getNotificationsByAffiliateId(affiliateId);
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = notifications.length;
+  const items = notifications.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as AffiliateNotification[],
+    items,
     total,
     page,
     pageSize,
@@ -247,16 +175,7 @@ export async function listNotifications(
 export async function markNotificationAsRead(
   notificationId: string
 ): Promise<void> {
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("affiliate_notifications")
-    .update({ is_read: true })
-    .eq("id", notificationId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  await affiliateRepository.updateNotification(notificationId, { isRead: true });
 }
 
 export async function getAffiliateStats(): Promise<{
@@ -265,33 +184,22 @@ export async function getAffiliateStats(): Promise<{
   pendingAffiliates: number;
   totalCommission: number;
 }> {
-  const supabase = await createClient();
-
-  const [total, active, pending, commission] = await Promise.all([
-    supabase.from("affiliates").select("*", { count: "exact", head: true }),
-    supabase
-      .from("affiliates")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "approved"),
-    supabase
-      .from("affiliates")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
-    supabase
-      .from("referrals")
-      .select("commission_amount")
-      .eq("status", "approved"),
+  const [totalAffiliates, activeAffiliates, pendingAffiliates, approvedReferrals] = await Promise.all([
+    affiliateRepository.getAffiliatesCount(),
+    affiliateRepository.getAffiliatesCount({ status: AffiliateStatus.approved }),
+    affiliateRepository.getAffiliatesCount({ status: AffiliateStatus.pending }),
+    affiliateRepository.getAllReferrals({ status: ReferralStatus.approved }),
   ]);
 
-  const totalCommission = (commission.data ?? []).reduce(
-    (sum, r) => sum + r.commission_amount,
+  const totalCommission = approvedReferrals.reduce(
+    (sum, r) => sum + Number(r.commissionAmount),
     0
   );
 
   return {
-    totalAffiliates: total.count ?? 0,
-    activeAffiliates: active.count ?? 0,
-    pendingAffiliates: pending.count ?? 0,
+    totalAffiliates,
+    activeAffiliates,
+    pendingAffiliates,
     totalCommission,
   };
 }

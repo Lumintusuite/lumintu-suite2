@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getAffiliateByUserId, getReferralStats } from "@/lib/affiliates/queries";
 import { registerAffiliate } from "@/lib/affiliates/actions";
 import { generateReferralUrl } from "@/lib/affiliates/tracking";

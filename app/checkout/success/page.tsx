@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getOrderById } from "@/lib/orders/queries";
 
 export default async function CheckoutSuccessPage({
@@ -27,7 +27,7 @@ export default async function CheckoutSuccessPage({
   }
 
   // Verify the order belongs to the user
-  if (order.user_id !== user.id) {
+  if (order.userId !== user.id) {
     redirect("/orders");
   }
 

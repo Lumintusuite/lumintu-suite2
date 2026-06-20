@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listUserLicenses } from "@/lib/licenses/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,10 +59,10 @@ export default async function MemberLicensesPage({
                 {result.items.map((license: any) => (
                   <TableRow key={license.id}>
                     <TableCell className="font-mono text-sm">
-                      {license.license_key}
+                      {license.licenseKey}
                     </TableCell>
                     <TableCell>
-                      {license.products?.name || "-"}
+                      {license.product?.name || "-"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -78,11 +78,11 @@ export default async function MemberLicensesPage({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {license.activation_count}/{license.max_activations}
+                      {license.activationCount}/{license.maxActivations}
                     </TableCell>
                     <TableCell>
-                      {license.expires_at
-                        ? new Date(license.expires_at).toLocaleDateString()
+                      {license.expiresAt
+                        ? new Date(license.expiresAt).toLocaleDateString()
                         : "Never"}
                     </TableCell>
                     <TableCell className="text-right">

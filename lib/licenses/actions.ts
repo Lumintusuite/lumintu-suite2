@@ -15,8 +15,10 @@ import {
   calculateExpirationDate,
   generateUniqueLicenseKey,
 } from "@/lib/licenses/generator";
-import { createClient } from "@/lib/supabase/server";
+import { licenseRepository } from "@/lib/db/license-repository";
+import { productRepository } from "@/lib/db/product-repository";
 import { sendLicenseGeneratedEmail } from "@/lib/emails/actions";
+import { LicenseStatus } from "@prisma/client";
 
 const LICENSES_PATH = "/licenses";
 const ADMIN_LICENSES_PATH = "/admin/licenses";
@@ -43,28 +45,18 @@ export async function createLicense(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
   try {
     const licenseKey = await generateUniqueLicenseKey();
 
-    const { data: license, error } = await supabase
-      .from("licenses")
-      .insert({
-        user_id: parsed.data.userId,
-        product_id: parsed.data.productId,
-        order_id: parsed.data.orderId,
-        license_key: licenseKey,
-        status: "active",
-        max_activations: parsed.data.maxActivations,
-        expires_at: parsed.data.expiresAt || null,
-      })
-      .select("id")
-      .single();
-
-    if (error || !license) {
-      return { error: error?.message ?? "Failed to create license." };
-    }
+    await licenseRepository.createLicense({
+      userId: parsed.data.userId,
+      productId: parsed.data.productId,
+      orderId: parsed.data.orderId,
+      licenseKey,
+      status: LicenseStatus.active,
+      maxActivations: parseInt(parsed.data.maxActivations),
+      expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined,
+    });
 
     revalidatePath(LICENSES_PATH);
     revalidatePath(ADMIN_LICENSES_PATH);
@@ -82,48 +74,29 @@ export async function generateLicenseForOrder(
   userId: string,
   productId: string
 ): Promise<{ licenseId: string; licenseKey: string } | { error: string }> {
-  const supabase = await createClient();
-
   try {
     const licenseKey = await generateUniqueLicenseKey();
 
-    const { data: license, error } = await supabase
-      .from("licenses")
-      .insert({
-        user_id: userId,
-        product_id: productId,
-        order_id: orderId,
-        license_key: licenseKey,
-        status: "active",
-        max_activations: 1,
-        expires_at: calculateExpirationDate(1),
-      })
-      .select("id")
-      .single();
-
-    if (error || !license) {
-      return { error: error?.message ?? "Failed to generate license." };
-    }
+    const license = await licenseRepository.createLicense({
+      userId,
+      productId,
+      orderId,
+      licenseKey,
+      status: LicenseStatus.active,
+      maxActivations: 1,
+      expiresAt: calculateExpirationDate(1) ? new Date(calculateExpirationDate(1)) : undefined,
+    });
 
     // Get user and product info for email
-    const { data: user } = await supabase
-      .from("profiles")
-      .select("email, full_name")
-      .eq("id", userId)
-      .single();
-
-    const { data: product } = await supabase
-      .from("products")
-      .select("name")
-      .eq("id", productId)
-      .single();
+    const user = await licenseRepository.getUserById(userId);
+    const product = await productRepository.getProductById(productId);
 
     // Send license email
     if (user && product) {
       await sendLicenseGeneratedEmail(
         userId,
         user.email || "",
-        user.full_name || "Customer",
+        user.fullName || "Customer",
         product.name,
         licenseKey
       );
@@ -164,15 +137,12 @@ export async function updateLicenseStatus(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("licenses")
-    .update({ status: parsed.data.status })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await licenseRepository.updateLicense(id, {
+      status: parsed.data.status as LicenseStatus,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update license status." };
   }
 
   revalidatePath(ADMIN_LICENSES_PATH);
@@ -203,18 +173,13 @@ export async function extendLicense(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("licenses")
-    .update({
-      expires_at: parsed.data.expiresAt,
-      status: "active",
-    })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await licenseRepository.updateLicense(id, {
+      expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined,
+      status: LicenseStatus.active,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to extend license." };
   }
 
   revalidatePath(ADMIN_LICENSES_PATH);
@@ -245,15 +210,12 @@ export async function updateActivationLimit(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("licenses")
-    .update({ max_activations: parsed.data.maxActivations })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await licenseRepository.updateLicense(id, {
+      maxActivations: parseInt(parsed.data.maxActivations),
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update activation limit." };
   }
 
   revalidatePath(ADMIN_LICENSES_PATH);
@@ -274,12 +236,10 @@ export async function deleteLicense(
     return { error: "License ID is required." };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase.from("licenses").delete().eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await licenseRepository.deleteLicense(id);
+  } catch (error: any) {
+    return { error: error.message || "Failed to delete license." };
   }
 
   revalidatePath(ADMIN_LICENSES_PATH);

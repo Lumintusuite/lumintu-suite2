@@ -15,20 +15,15 @@ export function formatPrice(price: number): string {
 }
 
 export function getStoragePublicUrl(
-  bucket: string,
+  _bucket: string,
   path: string | null | undefined
 ): string | null {
   if (!path) {
     return null;
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-  if (!baseUrl) {
-    return null;
-  }
-
-  return `${baseUrl.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${path}`;
+  // Return the local storage path
+  return path;
 }
 
 export function getFileExtension(filename: string): string {

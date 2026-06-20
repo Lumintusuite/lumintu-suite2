@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { loggingRepository } from "@/lib/db/logging-repository";
 import {
   getWelcomeEmailTemplate,
   getPurchaseSuccessEmailTemplate,
@@ -44,24 +44,22 @@ async function logEmail(
   status: "pending" | "sent" | "failed",
   errorMessage?: string
 ): Promise<void> {
-  const supabase = await createClient();
-
   const updateData: any = {
     status,
   };
 
   if (status === "sent") {
-    updateData.sent_at = new Date().toISOString();
+    updateData.sentAt = new Date();
   }
 
   if (errorMessage) {
-    updateData.error_message = errorMessage;
+    updateData.errorMessage = errorMessage;
   }
 
-  await supabase.from("email_logs").insert({
-    user_id: userId,
-    email_type: emailType,
-    status,
+  await loggingRepository.createEmailLog({
+    userId: userId || undefined,
+    emailType,
+    status: status as any,
     ...updateData,
   });
 }
@@ -71,21 +69,8 @@ async function checkDuplicateEmail(
   emailType: EmailType,
   hours: number = 24
 ): Promise<boolean> {
-  const supabase = await createClient();
-
-  const cutoffTime = new Date();
-  cutoffTime.setHours(cutoffTime.getHours() - hours);
-
-  const { data } = await supabase
-    .from("email_logs")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("email_type", emailType)
-    .eq("status", "sent")
-    .gte("created_at", cutoffTime.toISOString())
-    .maybeSingle();
-
-  return !!data;
+  if (!userId) return false;
+  return loggingRepository.checkDuplicateEmail(userId, emailType, hours);
 }
 
 export async function sendWelcomeEmail(

@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { deleteCategory } from "@/lib/catalog/actions";
-import type { Category } from "@/lib/supabase/types";
+import type { Category } from "@/lib/types";
 
 export function CategoriesTable({ categories }: { categories: Category[] }) {
   const router = useRouter();

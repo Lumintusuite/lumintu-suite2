@@ -1,17 +1,33 @@
+import type { DefaultSession } from "next-auth";
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      role: string;
+    } & DefaultSession["user"];
+  }
+
+  interface User {
+    role: string;
+  }
+}
+
 export type UserRole = "admin" | "member";
 
 export interface Profile {
   id: string;
-  full_name: string | null;
-  role: UserRole;
-  created_at: string;
-  updated_at: string;
+  fullName: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthUser {
   id: string;
   email: string;
-  profile: Profile;
+  name?: string | null;
+  role: UserRole;
+  profile?: Profile | null;
 }
 
 export type AuthActionState = {

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { deleteProduct, publishProduct } from "@/lib/catalog/actions";
 import { formatPrice, getStoragePublicUrl } from "@/lib/catalog/utils";
-import type { ProductWithCategory } from "@/lib/supabase/types";
+import type { ProductWithCategory } from "@/lib/types";
 
 export function ProductsTable({ products }: { products: ProductWithCategory[] }) {
   const router = useRouter();
@@ -59,7 +59,7 @@ export function ProductsTable({ products }: { products: ProductWithCategory[] })
         {products.map((product) => {
           const thumbnailUrl = getStoragePublicUrl(
             "products",
-            product.thumbnail_path
+            product.thumbnailPath
           );
 
           return (
@@ -85,7 +85,7 @@ export function ProductsTable({ products }: { products: ProductWithCategory[] })
                   </div>
                 </div>
               </TableCell>
-              <TableCell>{product.categories?.name ?? "—"}</TableCell>
+              <TableCell>{product.category?.name ?? "—"}</TableCell>
               <TableCell>{formatPrice(Number(product.price))}</TableCell>
               <TableCell>
                 <Badge

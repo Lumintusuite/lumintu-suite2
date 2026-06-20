@@ -4,7 +4,7 @@ import {
   adminNavItems,
   DashboardShell,
 } from "@/components/dashboard/dashboard-shell";
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  if (user.profile.role !== "admin") {
+  if (user.role !== "admin") {
     redirect("/member");
   }
 
@@ -33,7 +33,7 @@ export default async function AdminLayout({
       subtitle="Administration"
       navItems={adminNavItems}
       email={user.email}
-      fullName={user.profile.full_name}
+      fullName={user.name || user.email}
       roleLabel="Administrator"
     >
       {children}

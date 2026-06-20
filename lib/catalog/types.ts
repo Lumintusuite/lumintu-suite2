@@ -1,6 +1,6 @@
-import type { Category, Product, ProductStatus, ProductWithCategory } from "@/lib/supabase/types";
+import type { Category, Product, ProductStatus, ProductWithCategory } from "@/lib/types";
 
-export type { Category, Product, ProductStatus, ProductWithCategory };
+export type { Category, Product, ProductStatus, ProductWithCategory } from "@/lib/types";
 
 export type CatalogActionState = {
   error?: string;

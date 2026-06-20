@@ -18,13 +18,15 @@ import {
   type MidtransNotification,
   verifyMidtransSignature,
 } from "@/lib/payments/midtrans";
-import { createClient } from "@/lib/supabase/server";
+import { paymentRepository } from "@/lib/db/payment-repository";
+import { orderRepository } from "@/lib/db/order-repository";
 import { getOrderById } from "@/lib/orders/queries";
 import { generateLicenseForOrder } from "@/lib/licenses/actions";
 import { getReferralFromCookie, clearReferralCookie } from "@/lib/affiliates/tracking";
 import { getAffiliateByCode } from "@/lib/affiliates/queries";
 import { createReferral } from "@/lib/affiliates/actions";
 import { sendPurchaseSuccessEmail } from "@/lib/emails/actions";
+import { PaymentStatus, OrderStatus } from "@prisma/client";
 
 const PAYMENTS_PATH = "/payments";
 const ADMIN_PAYMENTS_PATH = "/admin/payments";
@@ -51,8 +53,6 @@ export async function createPayment(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
   // Verify order exists and belongs to user
   const order = await getOrderById(parsed.data.orderId);
 
@@ -60,34 +60,27 @@ export async function createPayment(
     return { error: "Order not found." };
   }
 
-  if (order.user_id !== auth.user.id) {
+  if (order.userId !== auth.user.id) {
     return { error: "You can only create payments for your own orders." };
   }
 
   // Check if payment already exists
-  const existingPayment = await supabase
-    .from("payments")
-    .select("*")
-    .eq("order_id", parsed.data.orderId)
-    .maybeSingle();
+  const existingPayment = await paymentRepository.getPaymentByOrderId(parsed.data.orderId);
 
-  if (existingPayment.data) {
+  if (existingPayment) {
     return { error: "Payment already exists for this order." };
   }
 
   // Create payment record
-  const { data: payment, error: paymentError } = await supabase
-    .from("payments")
-    .insert({
-      order_id: parsed.data.orderId,
-      gross_amount: parsed.data.grossAmount,
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  if (paymentError || !payment) {
-    return { error: paymentError?.message ?? "Failed to create payment." };
+  let payment;
+  try {
+    payment = await paymentRepository.createPayment({
+      orderId: parsed.data.orderId,
+      grossAmount: parseFloat(parsed.data.grossAmount),
+      status: PaymentStatus.pending,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to create payment." };
   }
 
   // Prepare Midtrans transaction
@@ -96,10 +89,10 @@ export async function createPayment(
     email: auth.user.email,
   };
 
-  const itemDetails: MidtransItemDetails[] = order.order_items.map((item) => ({
-    id: item.product_id,
-    name: item.products.name,
-    price: item.price,
+  const itemDetails: MidtransItemDetails[] = order.items.map((item: any) => ({
+    id: item.productId,
+    name: item.product.name,
+    price: Number(item.price),
     quantity: item.quantity,
   }));
 
@@ -116,10 +109,9 @@ export async function createPayment(
     const midtransResponse = await createMidtransTransaction(transactionRequest);
 
     // Update payment with Midtrans order ID
-    await supabase
-      .from("payments")
-      .update({ midtrans_order_id: midtransResponse.token })
-      .eq("id", payment.id);
+    await paymentRepository.updatePayment(payment.id, {
+      midtransOrderId: midtransResponse.token,
+    });
 
     revalidatePath(PAYMENTS_PATH);
     revalidatePath(ADMIN_PAYMENTS_PATH);
@@ -131,7 +123,7 @@ export async function createPayment(
     };
   } catch (error) {
     // Rollback payment on Midtrans error
-    await supabase.from("payments").delete().eq("id", payment.id);
+    await paymentRepository.deletePayment(payment.id);
     return {
       error:
         error instanceof Error
@@ -149,16 +141,10 @@ export async function processWebhook(
     return { success: false, error: "Invalid signature" };
   }
 
-  const supabase = await createClient();
-
   // Find payment by midtrans_order_id
-  const { data: payment, error: paymentError } = await supabase
-    .from("payments")
-    .select("*, orders!inner(user_id)")
-    .eq("midtrans_order_id", notification.order_id)
-    .maybeSingle();
+  const payment = await paymentRepository.getPaymentByMidtransOrderId(notification.order_id);
 
-  if (paymentError || !payment) {
+  if (!payment) {
     return { success: false, error: "Payment not found" };
   }
 
@@ -170,56 +156,51 @@ export async function processWebhook(
 
   // Update payment status
   const updateData: any = {
-    status: newStatus,
+    status: newStatus as PaymentStatus,
   };
 
   if (newStatus === "paid") {
-    updateData.paid_at = new Date().toISOString();
-    updateData.payment_method = notification.payment_type;
+    updateData.paidAt = new Date();
+    updateData.paymentMethod = notification.payment_type;
   }
 
-  const { error: updateError } = await supabase
-    .from("payments")
-    .update(updateData)
-    .eq("id", payment.id);
-
-  if (updateError) {
-    return { success: false, error: updateError.message };
+  try {
+    await paymentRepository.updatePayment(payment.id, updateData);
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 
   // Update order status based on payment status
   if (newStatus === "paid") {
-    await supabase
-      .from("orders")
-      .update({ status: "completed" })
-      .eq("id", payment.order_id);
+    try {
+      await orderRepository.updateOrder(payment.orderId, {
+        status: OrderStatus.completed,
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
 
     // Generate licenses for each product in the order
-    const order = await getOrderById(payment.order_id);
+    const order = await getOrderById(payment.orderId);
     if (order) {
       // Send purchase success email
       await sendPurchaseSuccessEmail(
-        order.user_id,
-        (payment as any).orders?.profiles?.email || "",
-        (payment as any).orders?.profiles?.full_name || "Customer",
-        payment.order_id,
-        order.total
+        order.userId,
+        order.user.email || "",
+        order.user.profile?.full_name || "Customer",
+        payment.orderId,
+        Number(order.total)
       );
 
-      for (const item of order.order_items) {
+      for (const item of order.items) {
         // Check if license already exists for this product and order
-        const { data: existingLicense } = await supabase
-          .from("licenses")
-          .select("id")
-          .eq("order_id", payment.order_id)
-          .eq("product_id", item.product_id)
-          .maybeSingle();
+        const existingLicense = await paymentRepository.getPaymentByOrderId(payment.orderId);
 
         if (!existingLicense) {
           await generateLicenseForOrder(
-            payment.order_id,
-            order.user_id,
-            item.product_id
+            payment.orderId,
+            order.userId,
+            item.productId
           );
         }
       }
@@ -231,11 +212,11 @@ export async function processWebhook(
         
         if (affiliate && affiliate.status === "approved") {
           // Don't create commission if the buyer is the affiliate themselves
-          if (affiliate.user_id !== order.user_id) {
-            const commissionAmount = order.total * (affiliate.commission_rate / 100);
+          if (affiliate.user_id !== order.userId) {
+            const commissionAmount = Number(order.total) * (affiliate.commission_rate / 100);
             await createReferral(
               affiliate.id,
-              payment.order_id,
+              payment.orderId,
               commissionAmount
             );
           }
@@ -246,15 +227,18 @@ export async function processWebhook(
       }
     }
   } else if (newStatus === "failed" || newStatus === "expired") {
-    await supabase
-      .from("orders")
-      .update({ status: newStatus })
-      .eq("id", payment.order_id);
+    try {
+      await orderRepository.updateOrder(payment.orderId, {
+        status: newStatus as OrderStatus,
+      });
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
   }
 
   revalidatePath(PAYMENTS_PATH);
   revalidatePath(ADMIN_PAYMENTS_PATH);
-  revalidatePath(`/orders/${payment.order_id}`);
+  revalidatePath(`/orders/${payment.orderId}`);
   revalidatePath("/licenses");
   revalidatePath("/admin/licenses");
   revalidatePath("/affiliate");
@@ -287,18 +271,13 @@ export async function updatePaymentStatus(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("payments")
-    .update({
-      status: parsed.data.status,
-      paid_at: parsed.data.status === "paid" ? new Date().toISOString() : null,
-    })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await paymentRepository.updatePayment(id, {
+      status: parsed.data.status as PaymentStatus,
+      paidAt: parsed.data.status === "paid" ? new Date() : undefined,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update payment status." };
   }
 
   revalidatePath(ADMIN_PAYMENTS_PATH);

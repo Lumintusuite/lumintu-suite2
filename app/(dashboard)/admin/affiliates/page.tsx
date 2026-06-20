@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listAffiliates, getAffiliateStats } from "@/lib/affiliates/queries";
 import { approveAffiliate, rejectAffiliate } from "@/lib/affiliates/actions";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export default async function AdminAffiliatesPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -85,10 +85,10 @@ export default async function AdminAffiliatesPage({
                 {result.items.map((affiliate: any) => (
                   <TableRow key={affiliate.id}>
                     <TableCell>
-                      {affiliate.profiles?.full_name || affiliate.profiles?.email || "-"}
+                      {affiliate.profile?.fullName || affiliate.profile?.email || "-"}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {affiliate.affiliate_code}
+                      {affiliate.affiliateCode}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -103,9 +103,9 @@ export default async function AdminAffiliatesPage({
                         {affiliate.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{affiliate.commission_rate}%</TableCell>
+                    <TableCell>{affiliate.commissionRate}%</TableCell>
                     <TableCell>
-                      {new Date(affiliate.created_at).toLocaleDateString()}
+                      {new Date(affiliate.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       {affiliate.status === "pending" && (

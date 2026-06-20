@@ -4,7 +4,7 @@ import {
   DashboardShell,
   memberNavItems,
 } from "@/components/dashboard/dashboard-shell";
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function MemberLayout({
     redirect("/login");
   }
 
-  if (user.profile.role === "admin") {
+  if (user.role === "admin") {
     redirect("/admin");
   }
 
@@ -33,7 +33,7 @@ export default async function MemberLayout({
       subtitle="Member portal"
       navItems={memberNavItems}
       email={user.email}
-      fullName={user.profile.full_name}
+      fullName={user.name || user.email}
       roleLabel="Member"
     >
       {children}

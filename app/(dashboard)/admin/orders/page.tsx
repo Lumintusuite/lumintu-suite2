@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listOrders, getOrderStats } from "@/lib/orders/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ export default async function AdminOrdersPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -81,16 +81,16 @@ export default async function AdminOrdersPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {result.items.map((order) => (
+                {result.items.map((order: any) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono text-sm">
                       {order.id.slice(0, 8)}...
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {order.user_id.slice(0, 8)}...
+                      {order.userId.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
-                      {new Date(order.created_at).toLocaleDateString()}
+                      {new Date(order.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
                       <Badge

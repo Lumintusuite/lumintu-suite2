@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listLicenses, getLicenseStats } from "@/lib/licenses/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ export default async function AdminLicensesPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -85,13 +85,13 @@ export default async function AdminLicensesPage({
                 {result.items.map((license: any) => (
                   <TableRow key={license.id}>
                     <TableCell className="font-mono text-sm">
-                      {license.license_key}
+                      {license.licenseKey}
                     </TableCell>
                     <TableCell>
-                      {license.products?.name || "-"}
+                      {license.product?.name || "-"}
                     </TableCell>
                     <TableCell>
-                      {license.profiles?.full_name || license.profiles?.email || "-"}
+                      {license.profile?.fullName || license.profile?.email || "-"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -107,11 +107,11 @@ export default async function AdminLicensesPage({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {license.activation_count}/{license.max_activations}
+                      {license.activationCount}/{license.maxActivations}
                     </TableCell>
                     <TableCell>
-                      {license.expires_at
-                        ? new Date(license.expires_at).toLocaleDateString()
+                      {license.expiresAt
+                        ? new Date(license.expiresAt).toLocaleDateString()
                         : "Never"}
                     </TableCell>
                     <TableCell className="text-right">

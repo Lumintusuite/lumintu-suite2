@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getOrderById } from "@/lib/orders/queries";
 import { cancelOrder } from "@/lib/orders/actions";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,11 @@ export default async function OrderDetailPage({
   }
 
   // Verify the order belongs to the user or user is admin
-  if (order.user_id !== user.id && user.profile.role !== "admin") {
+  if (order.userId !== user.id && user.role !== "admin") {
     redirect("/orders");
   }
 
-  const isAdmin = user.profile.role === "admin";
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -67,7 +67,7 @@ export default async function OrderDetailPage({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Date:</span>
-              <span>{new Date(order.created_at).toLocaleString()}</span>
+              <span>{new Date(order.createdAt).toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Total:</span>
@@ -105,9 +105,9 @@ export default async function OrderDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.order_items.map((item) => (
+              {order.orderItems.map((item: any) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.products.name}</TableCell>
+                  <TableCell>{item.product.name}</TableCell>
                   <TableCell className="text-right">
                     ${item.price.toFixed(2)}
                   </TableCell>

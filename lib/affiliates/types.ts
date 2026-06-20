@@ -1,6 +1,6 @@
-import type { Affiliate, Referral, ReferralClick, AffiliateNotification } from "@/lib/supabase/types";
+import type { Affiliate, Referral, ReferralClick, AffiliateNotification } from "@/lib/types";
 
-export type { Affiliate, Referral, ReferralClick, AffiliateNotification };
+export type { Affiliate, Referral, ReferralClick, AffiliateNotification } from "@/lib/types";
 
 export type AffiliateActionState = {
   error?: string;

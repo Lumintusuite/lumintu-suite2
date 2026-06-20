@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getAffiliateByUserId, listReferrals } from "@/lib/affiliates/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,13 +64,13 @@ export default async function MemberReferralsPage({
                 {result.items.map((referral: any) => (
                   <TableRow key={referral.id}>
                     <TableCell className="font-mono text-sm">
-                      {referral.order_id.slice(0, 8)}...
+                      {referral.orderId.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
-                      ${(referral.orders?.total || 0).toFixed(2)}
+                      ${(referral.order?.total || 0).toFixed(2)}
                     </TableCell>
                     <TableCell className="font-bold">
-                      ${referral.commission_amount.toFixed(2)}
+                      ${referral.commissionAmount.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -84,7 +84,7 @@ export default async function MemberReferralsPage({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {new Date(referral.created_at).toLocaleDateString()}
+                      {new Date(referral.createdAt).toLocaleDateString()}
                     </TableCell>
                   </TableRow>
                 ))}

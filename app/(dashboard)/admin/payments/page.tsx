@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listPayments, getPaymentStats } from "@/lib/payments/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +20,7 @@ export default async function AdminPaymentsPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -82,16 +82,16 @@ export default async function AdminPaymentsPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {result.items.map((payment) => (
+                {result.items.map((payment: any) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-mono text-sm">
                       {payment.id.slice(0, 8)}...
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {payment.order_id.slice(0, 8)}...
+                      {payment.orderId.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
-                      {payment.payment_method || "-"}
+                      {payment.paymentMethod || "-"}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -107,10 +107,10 @@ export default async function AdminPaymentsPage({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      ${payment.gross_amount.toFixed(2)}
+                      ${payment.grossAmount.toFixed(2)}
                     </TableCell>
                     <TableCell>
-                      {new Date(payment.created_at).toLocaleDateString()}
+                      {new Date(payment.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

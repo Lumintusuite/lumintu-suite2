@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-import { createClient } from "@/lib/supabase/server";
+import { affiliateRepository } from "@/lib/db/affiliate-repository";
 import { getAffiliateByCode } from "@/lib/affiliates/queries";
 
 const REFERRAL_COOKIE_NAME = "referral_code";
@@ -44,16 +44,14 @@ export async function trackReferralClick(
     return { success: false, error: "Affiliate not approved" };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase.from("referral_clicks").insert({
-    affiliate_id: affiliate.id,
-    ip_address: ipAddress || null,
-    user_agent: userAgent || null,
-  });
-
-  if (error) {
-    return { success: false, error: error.message };
+  try {
+    await affiliateRepository.addReferralClick({
+      affiliateId: affiliate.id,
+      ipAddress,
+      userAgent,
+    });
+  } catch (error: any) {
+    return { success: false, error: error.message || "Failed to track referral click" };
   }
 
   // Set cookie for future tracking

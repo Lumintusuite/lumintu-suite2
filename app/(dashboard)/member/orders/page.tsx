@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { listUserOrders } from "@/lib/orders/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,13 +55,13 @@ export default async function MemberOrdersPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {result.items.map((order) => (
+                {result.items.map((order: any) => (
                   <TableRow key={order.id}>
                     <TableCell className="font-mono text-sm">
                       {order.id.slice(0, 8)}...
                     </TableCell>
                     <TableCell>
-                      {new Date(order.created_at).toLocaleDateString()}
+                      {new Date(order.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
                       <Badge

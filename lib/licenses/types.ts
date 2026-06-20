@@ -1,6 +1,6 @@
-import type { License, LicenseActivation } from "@/lib/supabase/types";
+import type { License, LicenseActivation } from "@/lib/types";
 
-export type { License, LicenseActivation };
+export type { License, LicenseActivation } from "@/lib/types";
 
 export type LicenseActionState = {
   error?: string;

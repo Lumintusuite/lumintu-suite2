@@ -4,42 +4,46 @@ Use this checklist to ensure Lumintu Suite is ready for production launch.
 
 ## Security
 
-- [ ] Review and test authentication flow
+- [ ] Review and test authentication flow (Auth.js)
 - [ ] Review and test authorization (admin/member/affiliate access)
 - [ ] Verify middleware protection on all protected routes
-- [ ] Review RLS policies for all tables
 - [ ] Test admin access controls
 - [ ] Test member access controls
 - [ ] Test affiliate access controls
-- [ ] Enable 2FA on all service accounts
+- [ ] Run `npm audit` and fix vulnerabilities
 - [ ] Rotate all API keys
 - [ ] Review and update CORS settings
 - [ ] Enable rate limiting on API endpoints
 - [ ] Set up security monitoring
+- [ ] Verify AUTH_SECRET is strong and unique
+- [ ] Verify HTTPS is enforced in production
 
-## Database
+## Database (Prisma + PostgreSQL)
 
-- [ ] Run all migrations in correct order
-- [ ] Verify all tables created
+- [ ] Run `npx prisma migrate deploy` to apply migrations
+- [ ] Verify all tables created correctly
 - [ ] Verify all indexes created
-- [ ] Verify RLS policies enabled
-- [ ] Test RLS policies work correctly
-- [ ] Create admin user manually
-- [ ] Enable automated backups
+- [ ] Run `npx prisma generate` to generate client
+- [ ] Create admin user manually in database
+- [ ] Enable automated backups (PostgreSQL)
 - [ ] Test backup restoration
 - [ ] Review database performance
 - [ ] Set up connection pooling
+- [ ] Verify database connection string is secure
+- [ ] Test database failover (if applicable)
 
 ## Configuration
 
-- [ ] Set all required environment variables
-- [ ] Verify Supabase configuration
-- [ ] Verify Midtrans configuration
-- [ ] Verify Resend configuration
+- [ ] Set all required environment variables (see docs/ENVIRONMENT.md)
+- [ ] Verify DATABASE_URL is correct
+- [ ] Verify AUTH_SECRET is generated and secure
+- [ ] Verify NEXTAUTH_URL is set to production domain
+- [ ] Verify Midtrans configuration (sandbox vs production)
+- [ ] Verify Resend configuration and domain verification
 - [ ] Set production domain
 - [ ] Configure SSL certificates
-- [ ] Set up CDN for static assets
-- [ ] Configure email domain verification
+- [ ] Set up CDN for static assets (optional)
+- [ ] Verify email domain is verified in Resend
 
 ## Performance
 
@@ -91,31 +95,33 @@ Use this checklist to ensure Lumintu Suite is ready for production launch.
 
 ## Testing
 
-- [ ] Test user registration flow
-- [ ] Test login flow
-- [ ] Test password reset flow
+- [ ] Test user registration flow (Auth.js)
+- [ ] Test login flow (Auth.js)
+- [ ] Test logout flow (Auth.js)
+- [ ] Test session persistence
 - [ ] Test admin dashboard
 - [ ] Test member dashboard
 - [ ] Test product creation
 - [ ] Test checkout flow
-- [ ] Test payment processing
+- [ ] Test payment processing (Midtrans)
 - [ ] Test license generation
 - [ ] Test affiliate sign-up
 - [ ] Test affiliate approval
 - [ ] Test referral tracking
-- [ ] Test email delivery
-- [ ] Test webhook processing
+- [ ] Test email delivery (Resend)
+- [ ] Test webhook processing (Midtrans callbacks)
 
 ## Documentation
 
-- [ ] Update deployment guide
-- [ ] Document environment variables
+- [ ] Update deployment guide (Vercel)
+- [ ] Document environment variables (docs/ENVIRONMENT.md)
 - [ ] Document API endpoints
 - [ ] Create troubleshooting guide
-- [ ] Document backup procedures
+- [ ] Document backup procedures (PostgreSQL)
 - [ ] Create runbook for common issues
 - [ ] Document escalation procedures
-- [ ] Update README
+- [ ] Update README with new architecture
+- [ ] Document Prisma migration process
 
 ## Compliance
 
@@ -124,8 +130,8 @@ Use this checklist to ensure Lumintu Suite is ready for production launch.
 - [ ] Set up cookie consent
 - [ ] Configure GDPR compliance
 - [ ] Review data retention policy
-- [ ] Set up data export functionality
-- [ ] Configure data deletion
+- [ ] Set up data export functionality (user account deletion)
+- [ ] Configure data deletion (user account deletion)
 - [ ] Review accessibility compliance
 
 ## Launch Readiness
@@ -135,11 +141,12 @@ Use this checklist to ensure Lumintu Suite is ready for production launch.
 - [ ] Marketing materials ready
 - [ ] Support team trained
 - [ ] Documentation published
-- [ ] Monitoring configured
+- [ ] Monitoring configured (Vercel Analytics)
 - [ ] Alerts configured
-- [ ] Backup procedures tested
+- [ ] Backup procedures tested (PostgreSQL)
 - [ ] Rollback plan documented
 - [ ] Launch window scheduled
+- [ ] Run `npm install`, `npx prisma generate`, `npm run lint`, `npm run build` successfully
 
 ## Post-Launch
 

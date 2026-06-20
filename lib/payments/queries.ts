@@ -1,11 +1,11 @@
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import type { AuthUser } from "@/lib/auth/types";
 import {
   DEFAULT_PAGE_SIZE,
   type PaginatedResult,
 } from "@/lib/catalog/types";
-import { createClient } from "@/lib/supabase/server";
-import type { Payment } from "@/lib/supabase/types";
+import { paymentRepository } from "@/lib/db/payment-repository";
+import { PaymentStatus } from "@prisma/client";
 
 export async function requireAuthenticated(): Promise<
   { user: AuthUser } | { error: string }
@@ -28,7 +28,7 @@ export async function requireAdmin(): Promise<
     return { error: "You must be signed in." };
   }
 
-  if (user.profile.role !== "admin") {
+  if (user.role !== "admin") {
     return { error: "Admin access required." };
   }
 
@@ -51,25 +51,16 @@ export async function listPayments({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   search = "",
-}: ListParams = {}): Promise<PaginatedResult<Payment>> {
-  const supabase = await createClient();
+}: ListParams = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("payments")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let payments = await paymentRepository.getAllPayments();
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = payments.length;
+  const items = payments.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Payment[],
+    items,
     total,
     page,
     pageSize,
@@ -80,25 +71,19 @@ export async function listPayments({
 export async function listUserPayments(
   userId: string,
   { page = 1, pageSize = DEFAULT_PAGE_SIZE }: Omit<ListParams, "search"> = {}
-): Promise<PaginatedResult<Payment>> {
-  const supabase = await createClient();
+): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  const { data, error, count } = await supabase
-    .from("payments")
-    .select("*, orders!inner(user_id)", { count: "exact" })
-    .eq("orders.user_id", userId)
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  const allPayments = await paymentRepository.getAllPayments();
+  const userPayments = allPayments.filter(
+    (p) => p.order.userId === userId
+  );
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = userPayments.length;
+  const items = userPayments.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Payment[],
+    items,
     total,
     page,
     pageSize,
@@ -108,38 +93,14 @@ export async function listUserPayments(
 
 export async function getPaymentById(
   id: string
-): Promise<Payment | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as Payment | null) ?? null;
+): Promise<any | null> {
+  return paymentRepository.getPaymentById(id);
 }
 
 export async function getPaymentByOrderId(
   orderId: string
-): Promise<Payment | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("payments")
-    .select("*")
-    .eq("order_id", orderId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as Payment | null) ?? null;
+): Promise<any | null> {
+  return paymentRepository.getPaymentByOrderId(orderId);
 }
 
 export async function getPaymentStats(): Promise<{
@@ -149,35 +110,20 @@ export async function getPaymentStats(): Promise<{
   failedPayments: number;
   totalRevenue: number;
 }> {
-  const supabase = await createClient();
-
-  const [total, paid, pending, failed, revenue] = await Promise.all([
-    supabase.from("payments").select("*", { count: "exact", head: true }),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "paid"),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
-    supabase
-      .from("payments")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "failed"),
-    supabase.from("payments").select("gross_amount").eq("status", "paid"),
+  const [totalPayments, paidPayments, pendingPayments, failedPayments] = await Promise.all([
+    paymentRepository.getPaymentsCount(),
+    paymentRepository.getPaymentsCount({ status: PaymentStatus.paid }),
+    paymentRepository.getPaymentsCount({ status: PaymentStatus.pending }),
+    paymentRepository.getPaymentsCount({ status: PaymentStatus.failed }),
   ]);
 
-  const totalRevenue = (revenue.data ?? []).reduce(
-    (sum, payment) => sum + (payment.gross_amount ?? 0),
-    0
-  );
+  const totalRevenue = await paymentRepository.getTotalRevenue();
 
   return {
-    totalPayments: total.count ?? 0,
-    paidPayments: paid.count ?? 0,
-    pendingPayments: pending.count ?? 0,
-    failedPayments: failed.count ?? 0,
-    totalRevenue,
+    totalPayments,
+    paidPayments,
+    pendingPayments,
+    failedPayments,
+    totalRevenue: Number(totalRevenue),
   };
 }

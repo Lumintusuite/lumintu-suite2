@@ -1,11 +1,11 @@
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import type { AuthUser } from "@/lib/auth/types";
 import {
   DEFAULT_PAGE_SIZE,
   type PaginatedResult,
 } from "@/lib/catalog/types";
-import { createClient } from "@/lib/supabase/server";
-import type { Order, OrderWithItems } from "@/lib/supabase/types";
+import { orderRepository } from "@/lib/db/order-repository";
+import { OrderStatus } from "@prisma/client";
 
 export async function requireAuthenticated(): Promise<
   { user: AuthUser } | { error: string }
@@ -28,7 +28,7 @@ export async function requireAdmin(): Promise<
     return { error: "You must be signed in." };
   }
 
-  if (user.profile.role !== "admin") {
+  if (user.role !== "admin") {
     return { error: "Admin access required." };
   }
 
@@ -51,25 +51,16 @@ export async function listOrders({
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
   search = "",
-}: ListParams = {}): Promise<PaginatedResult<Order>> {
-  const supabase = await createClient();
+}: ListParams = {}): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  let query = supabase
-    .from("orders")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let orders = await orderRepository.getAllOrders();
 
-  const { data, error, count } = await query.range(from, to);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = orders.length;
+  const items = orders.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Order[],
+    items,
     total,
     page,
     pageSize,
@@ -80,25 +71,16 @@ export async function listOrders({
 export async function listUserOrders(
   userId: string,
   { page = 1, pageSize = DEFAULT_PAGE_SIZE }: Omit<ListParams, "search"> = {}
-): Promise<PaginatedResult<Order>> {
-  const supabase = await createClient();
+): Promise<PaginatedResult<any>> {
   const { from, to } = getPaginationRange(page, pageSize);
 
-  const { data, error, count } = await supabase
-    .from("orders")
-    .select("*", { count: "exact" })
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .range(from, to);
+  let orders = await orderRepository.getAllOrders({ userId });
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const total = count ?? 0;
+  const total = orders.length;
+  const items = orders.slice(from, to + 1);
 
   return {
-    items: (data ?? []) as Order[],
+    items,
     total,
     page,
     pageSize,
@@ -108,28 +90,8 @@ export async function listUserOrders(
 
 export async function getOrderById(
   id: string
-): Promise<OrderWithItems | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select(
-      `
-      *,
-      order_items (
-        *,
-        products (id, name, slug)
-      )
-    `
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data as OrderWithItems | null) ?? null;
+): Promise<any | null> {
+  return orderRepository.getOrderById(id);
 }
 
 export async function getOrderStats(): Promise<{
@@ -139,38 +101,24 @@ export async function getOrderStats(): Promise<{
   cancelledOrders: number;
   totalRevenue: number;
 }> {
-  const supabase = await createClient();
-
-  const [total, pending, completed, cancelled, revenue] = await Promise.all([
-    supabase.from("orders").select("*", { count: "exact", head: true }),
-    supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
-    supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "completed"),
-    supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "cancelled"),
-    supabase
-      .from("orders")
-      .select("total")
-      .eq("status", "completed"),
+  const [totalOrders, pendingOrders, completedOrders, cancelledOrders] = await Promise.all([
+    orderRepository.getOrdersCount(),
+    orderRepository.getOrdersCount({ status: OrderStatus.pending }),
+    orderRepository.getOrdersCount({ status: OrderStatus.completed }),
+    orderRepository.getOrdersCount({ status: OrderStatus.cancelled }),
   ]);
 
-  const totalRevenue = (revenue.data ?? []).reduce(
-    (sum, order) => sum + (order.total ?? 0),
+  const completedOrdersList = await orderRepository.getAllOrders({ status: OrderStatus.completed });
+  const totalRevenue = completedOrdersList.reduce(
+    (sum, order) => sum + Number(order.total),
     0
   );
 
   return {
-    totalOrders: total.count ?? 0,
-    pendingOrders: pending.count ?? 0,
-    completedOrders: completed.count ?? 0,
-    cancelledOrders: cancelled.count ?? 0,
+    totalOrders,
+    pendingOrders,
+    completedOrders,
+    cancelledOrders,
     totalRevenue,
   };
 }

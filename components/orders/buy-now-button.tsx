@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import type { Product } from "@/lib/supabase/types";
+import type { Product } from "@/lib/types";
 
 interface BuyNowButtonProps {
   product: Product;

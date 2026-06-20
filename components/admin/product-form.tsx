@@ -24,7 +24,7 @@ import {
 } from "@/lib/catalog/actions";
 import type { CatalogActionState } from "@/lib/catalog/types";
 import { getStoragePublicUrl, slugify } from "@/lib/catalog/utils";
-import type { Category, ProductWithCategory } from "@/lib/supabase/types";
+import type { Category, ProductWithCategory } from "@/lib/types";
 
 const initialState: CatalogActionState = {};
 
@@ -49,12 +49,12 @@ export function ProductForm({
   const [slug, setSlug] = useState(product?.slug ?? "");
   const [slugEdited, setSlugEdited] = useState(Boolean(product));
   const [status, setStatus] = useState(product?.status ?? "draft");
-  const [categoryId, setCategoryId] = useState(product?.category_id ?? "");
+  const [categoryId, setCategoryId] = useState(product?.categoryId ?? "");
   const [removeThumbnail, setRemoveThumbnail] = useState(false);
   const [removeFile, setRemoveFile] = useState(false);
   const router = useRouter();
 
-  const thumbnailUrl = getStoragePublicUrl("products", product?.thumbnail_path);
+  const thumbnailUrl = getStoragePublicUrl("products", product?.thumbnailPath);
 
   useEffect(() => {
     if (!slugEdited) {
@@ -207,9 +207,9 @@ export function ProductForm({
 
       <div className="space-y-2">
         <Label htmlFor="file">Product file</Label>
-        {product?.file_path && !removeFile ? (
+        {product?.filePath && !removeFile ? (
           <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-            <p className="truncate text-sm">{product.file_path.split("/").pop()}</p>
+            <p className="truncate text-sm">{product.filePath.split("/").pop()}</p>
             <Button
               type="button"
               variant="outline"

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getPaymentById } from "@/lib/payments/queries";
 import { updatePaymentStatus } from "@/lib/payments/actions";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ export default async function AdminPaymentDetailPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 

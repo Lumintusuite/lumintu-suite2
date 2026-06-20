@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { licenseRepository } from "@/lib/db/license-repository";
 
 const LICENSE_PREFIX = "LUM";
 const SEGMENT_LENGTH = 4;
@@ -24,19 +24,8 @@ export function generateLicenseKey(): string {
 export async function isLicenseKeyUnique(
   licenseKey: string
 ): Promise<boolean> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("licenses")
-    .select("id")
-    .eq("license_key", licenseKey)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to check license uniqueness: ${error.message}`);
-  }
-
-  return data === null;
+  const existingLicense = await licenseRepository.getLicenseByKey(licenseKey);
+  return existingLicense === null;
 }
 
 export async function generateUniqueLicenseKey(

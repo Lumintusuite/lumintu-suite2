@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getLicenseById, getLicenseActivations } from "@/lib/licenses/queries";
 import { updateLicenseStatus, extendLicense, updateActivationLimit, deleteLicense } from "@/lib/licenses/actions";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default async function AdminLicenseDetailPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -39,7 +39,7 @@ export default async function AdminLicenseDetailPage({
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">License Details</h1>
         <p className="text-gray-600">
-          License Key: <span className="font-mono">{license.license_key}</span>
+          License Key: <span className="font-mono">{license.licenseKey}</span>
         </p>
       </div>
 
@@ -49,11 +49,11 @@ export default async function AdminLicenseDetailPage({
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">User:</span>
-              <span>{(license as any).profiles?.full_name || (license as any).profiles?.email || "-"}</span>
+              <span>{(license as any).profile?.fullName || (license as any).profile?.email || "-"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Product:</span>
-              <span>{(license as any).products?.name || "-"}</span>
+              <span>{(license as any).product?.name || "-"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Status:</span>
@@ -72,20 +72,20 @@ export default async function AdminLicenseDetailPage({
             <div className="flex justify-between">
               <span className="text-gray-600">Activations:</span>
               <span>
-                {license.activation_count}/{license.max_activations}
+                {license.activationCount}/{license.maxActivations}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Expires At:</span>
               <span>
-                {license.expires_at
-                  ? new Date(license.expires_at).toLocaleString()
+                {license.expiresAt
+                  ? new Date(license.expiresAt).toLocaleString()
                   : "Never"}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Created At:</span>
-              <span>{new Date(license.created_at).toLocaleString()}</span>
+              <span>{new Date(license.createdAt).toLocaleString()}</span>
             </div>
           </div>
 
@@ -131,7 +131,7 @@ export default async function AdminLicenseDetailPage({
                 <Input
                   name="maxActivations"
                   type="number"
-                  defaultValue={license.max_activations}
+                  defaultValue={license.maxActivations}
                   min="1"
                   max="100"
                 />

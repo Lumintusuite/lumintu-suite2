@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentUser } from "@/lib/auth/get-user";
+import { getCurrentUser } from "@/lib/auth/session";
 import { getOrderById } from "@/lib/orders/queries";
 import { updateOrderStatus } from "@/lib/orders/actions";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,7 @@ export default async function AdminOrderDetailPage({
 }) {
   const user = await getCurrentUser();
 
-  if (!user || user.profile.role !== "admin") {
+  if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
@@ -53,7 +53,7 @@ export default async function AdminOrderDetailPage({
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">User ID:</span>
-              <span className="font-mono">{order.user_id}</span>
+              <span className="font-mono">{order.userId}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Status:</span>
@@ -71,7 +71,7 @@ export default async function AdminOrderDetailPage({
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Date:</span>
-              <span>{new Date(order.created_at).toLocaleString()}</span>
+              <span>{new Date(order.createdAt).toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Total:</span>
@@ -120,9 +120,9 @@ export default async function AdminOrderDetailPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.order_items.map((item) => (
+              {order.orderItems.map((item: any) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.products.name}</TableCell>
+                  <TableCell>{item.product.name}</TableCell>
                   <TableCell className="text-right">
                     ${item.price.toFixed(2)}
                   </TableCell>

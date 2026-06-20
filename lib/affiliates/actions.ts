@@ -13,8 +13,9 @@ import {
 } from "@/lib/affiliates/schemas";
 import type { AffiliateActionState } from "@/lib/affiliates/types";
 import { requireAdmin, requireAuthenticated } from "@/lib/affiliates/queries";
-import { createClient } from "@/lib/supabase/server";
+import { affiliateRepository } from "@/lib/db/affiliate-repository";
 import { sendAffiliateApprovedEmail, sendReferralSaleEmail } from "@/lib/emails/actions";
+import { AffiliateStatus, ReferralStatus } from "@prisma/client";
 
 const AFFILIATES_PATH = "/affiliate";
 const ADMIN_AFFILIATES_PATH = "/admin/affiliates";
@@ -38,44 +39,30 @@ export async function registerAffiliate(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
   // Check if user already has an affiliate account
-  const existingAffiliate = await supabase
-    .from("affiliates")
-    .select("id")
-    .eq("user_id", auth.user.id)
-    .maybeSingle();
+  const existingAffiliate = await affiliateRepository.getAffiliateByUserId(auth.user.id);
 
-  if (existingAffiliate.data) {
+  if (existingAffiliate) {
     return { error: "You already have an affiliate account." };
   }
 
   // Check if affiliate code is unique
-  const codeExists = await supabase
-    .from("affiliates")
-    .select("id")
-    .eq("affiliate_code", parsed.data.affiliateCode.toUpperCase())
-    .maybeSingle();
+  const codeExists = await affiliateRepository.getAffiliateByCode(parsed.data.affiliateCode.toUpperCase());
 
-  if (codeExists.data) {
+  if (codeExists) {
     return { error: "This affiliate code is already taken." };
   }
 
   // Create affiliate
-  const { data: affiliate, error } = await supabase
-    .from("affiliates")
-    .insert({
-      user_id: auth.user.id,
-      affiliate_code: parsed.data.affiliateCode.toUpperCase(),
-      status: "pending",
-      commission_rate: 10.00,
-    })
-    .select("id")
-    .single();
-
-  if (error || !affiliate) {
-    return { error: error?.message ?? "Failed to register affiliate." };
+  try {
+    await affiliateRepository.createAffiliate({
+      userId: auth.user.id,
+      affiliateCode: parsed.data.affiliateCode.toUpperCase(),
+      status: AffiliateStatus.pending,
+      commissionRate: 10.00,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to register affiliate." };
   }
 
   revalidatePath(AFFILIATES_PATH);
@@ -92,44 +79,33 @@ export async function approveAffiliate(
     return { error: auth.error };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("affiliates")
-    .update({ status: "approved" })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await affiliateRepository.updateAffiliate(id, {
+      status: AffiliateStatus.approved,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to approve affiliate." };
   }
 
   // Create notification and send email
-  const { data: affiliate } = await supabase
-    .from("affiliates")
-    .select("id, user_id, affiliate_code")
-    .eq("id", id)
-    .single();
+  const affiliate = await affiliateRepository.getAffiliateById(id);
 
   if (affiliate) {
-    await supabase.from("affiliate_notifications").insert({
-      affiliate_id: affiliate.id,
+    await affiliateRepository.createNotification({
+      affiliateId: affiliate.id,
       title: "Affiliate Approved",
       message: "Your affiliate account has been approved. You can now start earning commissions!",
     });
 
     // Get user info for email
-    const { data: user } = await supabase
-      .from("profiles")
-      .select("email, full_name")
-      .eq("id", affiliate.user_id)
-      .single();
+    const user = await affiliateRepository.getUserById(affiliate.userId);
 
-    if (user) {
+    if (user && user.profile) {
       await sendAffiliateApprovedEmail(
-        affiliate.user_id,
+        affiliate.userId,
         user.email || "",
-        user.full_name || "Affiliate",
-        affiliate.affiliate_code
+        user.profile.fullName || "Affiliate",
+        affiliate.affiliateCode
       );
     }
   }
@@ -148,27 +124,20 @@ export async function rejectAffiliate(
     return { error: auth.error };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("affiliates")
-    .update({ status: "rejected" })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await affiliateRepository.updateAffiliate(id, {
+      status: AffiliateStatus.rejected,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to reject affiliate." };
   }
 
   // Create notification
-  const { data: affiliate } = await supabase
-    .from("affiliates")
-    .select("id")
-    .eq("id", id)
-    .single();
+  const affiliate = await affiliateRepository.getAffiliateById(id);
 
   if (affiliate) {
-    await supabase.from("affiliate_notifications").insert({
-      affiliate_id: affiliate.id,
+    await affiliateRepository.createNotification({
+      affiliateId: affiliate.id,
       title: "Affiliate Rejected",
       message: "Your affiliate application has been rejected. Please contact support for more information.",
     });
@@ -202,15 +171,12 @@ export async function updateAffiliateStatus(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("affiliates")
-    .update({ status: parsed.data.status })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await affiliateRepository.updateAffiliate(id, {
+      status: parsed.data.status as AffiliateStatus,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update affiliate status." };
   }
 
   revalidatePath(ADMIN_AFFILIATES_PATH);
@@ -240,15 +206,12 @@ export async function updateCommissionRate(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("affiliates")
-    .update({ commission_rate: parsed.data.commissionRate })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await affiliateRepository.updateAffiliate(id, {
+      commissionRate: parsed.data.commissionRate,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update commission rate." };
   }
 
   revalidatePath(ADMIN_AFFILIATES_PATH);
@@ -260,56 +223,42 @@ export async function createReferral(
   orderId: string,
   commissionAmount: number
 ): Promise<{ error?: string; success?: string }> {
-  const supabase = await createClient();
-
   // Check if referral already exists for this order
-  const existingReferral = await supabase
-    .from("referrals")
-    .select("id")
-    .eq("order_id", orderId)
-    .maybeSingle();
+  const existingReferral = await affiliateRepository.getReferralByOrderId(orderId);
 
-  if (existingReferral.data) {
+  if (existingReferral) {
     return { error: "Referral already exists for this order." };
   }
 
-  const { error } = await supabase.from("referrals").insert({
-    affiliate_id: affiliateId,
-    order_id: orderId,
-    commission_amount: commissionAmount,
-    status: "pending",
-  });
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await affiliateRepository.createReferral({
+      affiliateId,
+      orderId,
+      commissionAmount,
+      status: ReferralStatus.pending,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to create referral." };
   }
 
   // Create notification and send email
-  const { data: affiliate } = await supabase
-    .from("affiliates")
-    .select("user_id")
-    .eq("id", affiliateId)
-    .single();
+  const affiliate = await affiliateRepository.getAffiliateById(affiliateId);
 
   if (affiliate) {
-    await supabase.from("affiliate_notifications").insert({
-      affiliate_id: affiliateId,
+    await affiliateRepository.createNotification({
+      affiliateId,
       title: "New Referral Sale",
       message: `You earned $${commissionAmount.toFixed(2)} commission from a new sale!`,
     });
 
     // Get user info for email
-    const { data: user } = await supabase
-      .from("profiles")
-      .select("email, full_name")
-      .eq("id", affiliate.user_id)
-      .single();
+    const user = await affiliateRepository.getUserById(affiliate.userId);
 
-    if (user) {
+    if (user && user.profile) {
       await sendReferralSaleEmail(
-        affiliate.user_id,
+        affiliate.userId,
         user.email || "",
-        user.full_name || "Affiliate",
+        user.profile.fullName || "Affiliate",
         commissionAmount
       );
     }
@@ -343,15 +292,12 @@ export async function updateReferralStatus(
     return { fieldErrors: mapZodErrors(parsed.error) };
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("referrals")
-    .update({ status: parsed.data.status })
-    .eq("id", id);
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await affiliateRepository.updateReferral(id, {
+      status: parsed.data.status as ReferralStatus,
+    });
+  } catch (error: any) {
+    return { error: error.message || "Failed to update referral status." };
   }
 
   revalidatePath(ADMIN_REFERRALS_PATH);
